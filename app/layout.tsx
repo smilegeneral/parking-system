@@ -1,6 +1,5 @@
 import './globals.css'
 import type { ReactNode } from 'react'
-import { SessionProvider } from 'next-auth/react'
 import AutoLogout from '@/components/AutoLogout'
 
 export const metadata = {
@@ -12,10 +11,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="zh-CN">
       <body>
-        <SessionProvider>
-          <AutoLogout />
-          {children}
-        </SessionProvider>
+        <AutoLogout />
+        {children}
       </body>
     </html>
   )
