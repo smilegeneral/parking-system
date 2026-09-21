@@ -1,5 +1,6 @@
 import './globals.css'
 import type { ReactNode } from 'react'
+import SessionGuard from '@/components/SessionGuard'
 
 export const metadata = {
   title: '小区车库车位管理系统',
@@ -10,6 +11,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="zh-CN">
       <body>
+        <SessionGuard />
         {children}
       </body>
     </html>
