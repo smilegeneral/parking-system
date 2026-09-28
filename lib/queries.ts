@@ -24,6 +24,7 @@ import type {
   ZoneUnsoldStat,
   TopOwnerStat,
   NotBoughtOwnerStat,
+  HouseSpaceStat,
   ZoneStat,
 } from './types'
 
