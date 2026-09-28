@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 const STATUSES = ['未售', '预订', '已售', '团购锁定', '已核销']
+const ZONES = ['A区', 'B区', 'C区', 'D1区', 'D2区', 'E区']
 
 export default function QueryForm() {
   const router = useRouter()
@@ -29,7 +30,12 @@ export default function QueryForm() {
     <form onSubmit={submit}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: 8 }}>
         <F label="车位号（模糊）"><input className="input" value={f.space_id} onChange={e => set('space_id', e.target.value)} placeholder="如 A-001" /></F>
-        <F label="区域"><input className="input" value={f.garage_zone} onChange={e => set('garage_zone', e.target.value)} placeholder="如 A区" /></F>
+        <F label="区域">
+          <select className="select" value={f.garage_zone} onChange={e => set('garage_zone', e.target.value)}>
+            <option value="">全部</option>
+            {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+          </select>
+        </F>
         <F label="楼栋（精确）"><input className="input" value={f.building_no} onChange={e => set('building_no', e.target.value)} placeholder="如 1" /></F>
         <F label="单元号">
           <select className="select" value={f.unit_no} onChange={e => set('unit_no', e.target.value)}>
