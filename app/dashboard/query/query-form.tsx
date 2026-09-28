@@ -3,9 +3,8 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 const STATUSES = ['未售', '预订', '已售', '团购锁定', '已核销']
-const ZONES = ['A区', 'B区', 'C区', 'D1区', 'D2区', 'E区']
 
-export default function QueryForm() {
+export default function QueryForm({ zones, spaceTypes }: { zones: string[]; spaceTypes: string[] }) {
   const router = useRouter()
   const [f, setF] = useState({
     space_id: '', garage_zone: '', building_no: '', unit_no: '', status: '',
@@ -33,7 +32,7 @@ export default function QueryForm() {
         <F label="区域">
           <select className="select" value={f.garage_zone} onChange={e => set('garage_zone', e.target.value)}>
             <option value="">全部</option>
-            {ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+            {zones.map(z => <option key={z} value={z}>{z}</option>)}
           </select>
         </F>
         <F label="楼栋（精确）"><input className="input" value={f.building_no} onChange={e => set('building_no', e.target.value)} placeholder="如 1" /></F>
@@ -53,7 +52,12 @@ export default function QueryForm() {
         <F label="业主名（模糊）"><input className="input" value={f.owner_name} onChange={e => set('owner_name', e.target.value)} placeholder="业主姓名" /></F>
         <F label="电话（模糊）"><input className="input" value={f.phone} onChange={e => set('phone', e.target.value)} placeholder="电话" /></F>
         <F label="房屋编号（模糊）"><input className="input" value={f.house_key} onChange={e => set('house_key', e.target.value)} placeholder="如 1-1" /></F>
-        <F label="车位类型"><input className="input" value={f.space_type} onChange={e => set('space_type', e.target.value)} placeholder="如 普通车位" /></F>
+        <F label="车位类型">
+          <select className="select" value={f.space_type} onChange={e => set('space_type', e.target.value)}>
+            <option value="">全部</option>
+            {spaceTypes.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </F>
       </div>
       <div className="flex mt-4" style={{ gap: 8 }}>
         <button type="submit" className="btn-primary" style={{ fontSize: 13 }}>🔍 查询</button>

@@ -1,4 +1,4 @@
-import { searchSpaces, getSpaceHistory, getSpaceHistories } from '@/lib/queries'
+import { searchSpaces, getSpaceHistory, getSpaceHistories, getZones, getSpaceTypes } from '@/lib/queries'
 import Link from 'next/link'
 import QueryForm from './query-form'
 import QueryActions from './query-actions'
@@ -32,6 +32,10 @@ export default async function QueryPage({
   const totalCount = results.length
   const totalAmount = results.reduce((s, r) => s + Number(r.price || 0), 0)
 
+  // 区域 / 车位类型 下拉选项（动态从数据库读取）
+  const zones = await getZones()
+  const spaceTypes = await getSpaceTypes()
+
   // 若以车位号查询，额外拉取该（多）车位按时间顺序的购买 + 调换记录
   // 支持逗号 / 空格 / 换行分隔多个车位号，且每个关键字模糊匹配（ILIKE）
   const spaceIdPatterns = params.space_id
@@ -50,7 +54,7 @@ export default async function QueryPage({
       </header>
 
       <section className="card mb-4 query-no-print">
-        <QueryForm />
+        <QueryForm zones={zones} spaceTypes={spaceTypes} />
       </section>
 
       {hasFilter && (

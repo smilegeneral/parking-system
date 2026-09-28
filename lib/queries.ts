@@ -519,6 +519,16 @@ export async function getZones(): Promise<string[]> {
   return rows.map((r: any) => r.garage_zone)
 }
 
+// ---------- 车位类型列表（动态从数据获取） ----------
+export async function getSpaceTypes(): Promise<string[]> {
+  const { rows } = await pool.query(`
+    SELECT DISTINCT space_type FROM parking_spaces
+    WHERE space_type IS NOT NULL AND space_type <> ''
+    ORDER BY space_type
+  `)
+  return rows.map((r: any) => r.space_type)
+}
+
 // ---------- 车位分布图：某区/全部未售车位 ----------
 export async function getUnsoldSpacesByZone(zone: string): Promise<ParkingSpace[]> {
   const { rows } = await pool.query(
