@@ -287,7 +287,8 @@ export async function getAdminUserById(id: number): Promise<AdminUser | null> {
 }
 
 // ---------- 车位模糊查询 ----------
-export async function searchSpaces(params: SpaceSearchParams, limit = 200): Promise<ParkingSpace[]> {
+// limit 不传或 <=0 时返回全部匹配记录（用于查询页分页 + 导出全部）
+export async function searchSpaces(params: SpaceSearchParams, limit?: number): Promise<ParkingSpace[]> {
   const conds: string[] = []
   const vals: any[] = []
   let i = 1
@@ -316,9 +317,11 @@ export async function searchSpaces(params: SpaceSearchParams, limit = 200): Prom
   exact('space_type', params.space_type)
 
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
+  const limitClause = limit && limit > 0 ? ` LIMIT $${i}` : ''
+  const queryVals = limit && limit > 0 ? [...vals, limit] : vals
   const { rows } = await pool.query(
-    `SELECT * FROM parking_spaces ${where} ORDER BY garage_zone, building_no, space_id LIMIT $${i}`,
-    [...vals, limit]
+    `SELECT * FROM parking_spaces ${where} ORDER BY garage_zone, building_no, space_id${limitClause}`,
+    queryVals
   )
   return rows as ParkingSpace[]
 }
