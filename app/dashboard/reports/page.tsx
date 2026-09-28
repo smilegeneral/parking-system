@@ -8,6 +8,7 @@ import {
   getUnsoldByZone,
   getTopOwners,
   getOwnersNotBought,
+  getHouseSpaceStats,
 } from '@/lib/queries'
 import ReportClient from './report-client'
 
@@ -15,7 +16,7 @@ import ReportClient from './report-client'
 export const dynamic = 'force-dynamic'
 
 export default async function ReportsPage() {
-  const [summary, sales, zoneSales, groupCompanies, trend, zones, unsoldByZone, topOwners, notBought] =
+  const [summary, sales, zoneSales, groupCompanies, trend, zones, unsoldByZone, topOwners, notBought, houseSpaces] =
     await Promise.all([
       getReportSummary(),
       getSalesComposition(),
@@ -26,6 +27,7 @@ export default async function ReportsPage() {
       getUnsoldByZone(),
       getTopOwners(20),
       getOwnersNotBought(),
+      getHouseSpaceStats(),
     ])
 
   return (
@@ -47,6 +49,7 @@ export default async function ReportsPage() {
         unsoldByZone={unsoldByZone}
         topOwners={topOwners}
         notBought={notBought}
+        houseSpaces={houseSpaces}
       />
     </main>
   )

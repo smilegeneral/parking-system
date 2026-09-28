@@ -332,6 +332,17 @@ export interface NotBoughtOwnerStat {
   owner_name: string
   phone: string
 }
+// 按户（楼号-单元号-房号）统计车位：一户几个车位、车位号、金额
+export interface HouseSpaceStat {
+  building_no: string
+  unit_no: string
+  room_no: string
+  house_key: string
+  owner_name: string
+  space_count: number       // 该户车位个数（已售/已核销）
+  space_ids: string         // 聚合的车位号，逗号分隔
+  total_amount: number      // 金额合计
+}
 export interface ReportSummary {
   total_sold_amount: number          // 已售总金额（含已售/已核销/团购锁定）
   total_sold_count: number           // 已售车位总数（含已售/已核销/团购锁定）

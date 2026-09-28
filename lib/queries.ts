@@ -831,6 +831,35 @@ export async function getOwnersNotBought(): Promise<NotBoughtOwnerStat[]> {
   return rows as NotBoughtOwnerStat[]
 }
 
+// 按户（楼号-单元号-房号）统计车位：一户几个车位、车位号列表、金额合计
+// 口径与「购买最多业主」一致：仅统计 status IN ('已售','已核销') 的车位
+export async function getHouseSpaceStats(): Promise<HouseSpaceStat[]> {
+  const { rows } = await pool.query(
+    `SELECT building_no, unit_no, room_no, house_key, owner_name,
+            COUNT(*)::int AS space_count,
+            STRING_AGG(space_id, ',' ORDER BY space_id) AS space_ids,
+            COALESCE(SUM(COALESCE(price,0)),0)::numeric AS total_amount
+     FROM parking_spaces
+     WHERE status IN ('已售','已核销')
+       AND owner_name IS NOT NULL AND owner_name <> ''
+     GROUP BY building_no, unit_no, room_no, house_key, owner_name
+     ORDER BY
+       CASE WHEN building_no ~ '^[0-9]+$' THEN building_no::int ELSE 9999 END,
+       CASE WHEN unit_no ~ '^[0-9]+$' THEN unit_no::int ELSE 9999 END,
+       CASE WHEN room_no ~ '^[0-9]+$' THEN room_no::int ELSE 9999 END`
+  )
+  return rows.map((r: any) => ({
+    building_no: r.building_no || '',
+    unit_no: r.unit_no || '',
+    room_no: r.room_no || '',
+    house_key: r.house_key || '',
+    owner_name: r.owner_name || '',
+    space_count: Number(r.space_count),
+    space_ids: r.space_ids || '',
+    total_amount: r.total_amount,
+  })) as HouseSpaceStat[]
+}
+
 // ============================================================
 //  AI 配置（ai_config）
 //  统一约定：任何查询都不得返回 api_key_enc，明文 Key 不下发前端
