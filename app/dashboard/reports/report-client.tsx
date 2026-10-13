@@ -12,6 +12,7 @@ import type {
   ZoneUnsoldStat,
   TopOwnerStat,
   NotBoughtOwnerStat,
+  HouseSpaceStat,
 } from '@/lib/types'
 
 // 金额格式化：按数据库返回的原始数值原样显示，不做任何四舍五入。
@@ -62,6 +63,7 @@ export default function ReportClient({
   unsoldByZone,
   topOwners,
   notBought,
+  houseSpaces,
 }: {
   summary: ReportSummary
   sales: SalesComposition
@@ -72,8 +74,9 @@ export default function ReportClient({
   unsoldByZone: ZoneUnsoldStat[]
   topOwners: TopOwnerStat[]
   notBought: NotBoughtOwnerStat[]
+  houseSpaces: HouseSpaceStat[]
 }) {
-  const [tab, setTab] = useState<'zoneSales' | 'group' | 'trend' | 'zone' | 'top' | 'notbought'>(
+  const [tab, setTab] = useState<'zoneSales' | 'group' | 'trend' | 'zone' | 'top' | 'notbought' | 'house'>(
     'zoneSales'
   )
 
@@ -83,6 +86,7 @@ export default function ReportClient({
     { key: 'trend', label: '销售趋势' },
     { key: 'zone', label: '按车库未售' },
     { key: 'top', label: '购买最多业主' },
+    { key: 'house', label: '按户车位统计' },
     { key: 'notbought', label: '未购车位业主' },
   ]
 
@@ -191,6 +195,16 @@ export default function ReportClient({
       nRows.push([r.house_key || '—', r.building_no || '—', r.unit_no || '—', r.room_no || '—', r.owner_name, r.phone || '—'])
     )
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(nRows), '未购车位业主')
+
+    // 9) 按户车位统计
+    const hRows: any[] = [['楼号', '单元', '房号', '房号(完整)', '业主', '车位数', '车位号', '金额']]
+    houseSpaces.forEach(r =>
+      hRows.push([
+        r.building_no || '—', r.unit_no || '—', r.room_no || '—', r.house_key || '—',
+        r.owner_name || '—', r.space_count, r.space_ids || '—', Number(r.total_amount),
+      ])
+    )
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hRows), '按户车位统计')
 
     const fileName = `统计报表_${new Date().toISOString().slice(0, 10)}.xlsx`
     XLSX.writeFile(wb, fileName)
@@ -600,6 +614,60 @@ export default function ReportClient({
               )}
             </table>
           </div>
+        </Card>
+      )}
+
+      {/* 按户车位统计 */}
+      {tab === 'house' && (
+        <Card title="按户（楼号-单元号-房号）统计车位：一户几个车位 / 车位号 / 金额">
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>楼号</th>
+                  <th>单元</th>
+                  <th>房号</th>
+                  <th>房号(完整)</th>
+                  <th>业主</th>
+                  <th>车位数</th>
+                  <th>车位号</th>
+                  <th>金额</th>
+                </tr>
+              </thead>
+              <tbody>
+                {houseSpaces.length === 0 && (
+                  <tr><td colSpan={8} className="text-center text-gray">暂无已售/已核销车位</td></tr>
+                )}
+                {houseSpaces.map((r, i) => (
+                  <tr key={(r.house_key || '') + i}>
+                    <td style={{ fontWeight: 600 }}>{r.building_no || '—'}</td>
+                    <td>{r.unit_no || '—'}</td>
+                    <td>{r.room_no || '—'}</td>
+                    <td>{r.house_key || '—'}</td>
+                    <td>{r.owner_name || '—'}</td>
+                    <td>{r.space_count}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 12, maxWidth: 360, wordBreak: 'break-all' }}>{r.space_ids || '—'}</td>
+                    <td style={{ color: '#fa8c16', fontWeight: 600 }}>{fmtMoney(r.total_amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {houseSpaces.length > 0 && (
+                <tfoot>
+                  <tr style={{ fontWeight: 700, background: '#fafafa' }}>
+                    <td colSpan={5}>合计（{houseSpaces.length} 户）</td>
+                    <td>{houseSpaces.reduce((s, r) => s + Number(r.space_count), 0)}</td>
+                    <td></td>
+                    <td style={{ color: '#fa8c16' }}>
+                      {fmtMoney(houseSpaces.reduce((s, r) => s + Number(r.total_amount), 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+          <p className="text-xs text-gray" style={{ marginTop: 8 }}>
+            按「楼号-单元号-房号」聚合；仅统计 status='已售'/'已核销' 的车位（与「购买最多业主」口径一致）；车位号为该户所有车位逗号分隔。
+          </p>
         </Card>
       )}
 

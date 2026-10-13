@@ -84,6 +84,11 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: 'jwt',
+    // 会话有效期 1 小时：浏览器关闭后最多保留 1 小时，超时再打开即要求重新登录
+    maxAge: 60 * 60,
+    // 滑动续期：有操作（每次请求）时每 30 分钟把过期时间顺延 1 小时，
+    // 无操作的空闲/关闭浏览器超过 1 小时后自动断开
+    updateAge: 30 * 60,
   },
   pages: {
     signIn: '/login',

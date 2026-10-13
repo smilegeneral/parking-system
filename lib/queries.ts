@@ -24,6 +24,7 @@ import type {
   ZoneUnsoldStat,
   TopOwnerStat,
   NotBoughtOwnerStat,
+  HouseSpaceStat,
   ZoneStat,
 } from './types'
 
@@ -287,7 +288,8 @@ export async function getAdminUserById(id: number): Promise<AdminUser | null> {
 }
 
 // ---------- 车位模糊查询 ----------
-export async function searchSpaces(params: SpaceSearchParams, limit = 200): Promise<ParkingSpace[]> {
+// limit 不传或 <=0 时返回全部匹配记录（用于查询页分页 + 导出全部）
+export async function searchSpaces(params: SpaceSearchParams, limit?: number): Promise<ParkingSpace[]> {
   const conds: string[] = []
   const vals: any[] = []
   let i = 1
@@ -316,9 +318,11 @@ export async function searchSpaces(params: SpaceSearchParams, limit = 200): Prom
   exact('space_type', params.space_type)
 
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
+  const limitClause = limit && limit > 0 ? ` LIMIT $${i}` : ''
+  const queryVals = limit && limit > 0 ? [...vals, limit] : vals
   const { rows } = await pool.query(
-    `SELECT * FROM parking_spaces ${where} ORDER BY garage_zone, building_no, space_id LIMIT $${i}`,
-    [...vals, limit]
+    `SELECT * FROM parking_spaces ${where} ORDER BY garage_zone, building_no, space_id${limitClause}`,
+    queryVals
   )
   return rows as ParkingSpace[]
 }
@@ -517,6 +521,16 @@ export async function getZones(): Promise<string[]> {
     SELECT DISTINCT garage_zone FROM parking_spaces ORDER BY garage_zone
   `)
   return rows.map((r: any) => r.garage_zone)
+}
+
+// ---------- 车位类型列表（动态从数据获取） ----------
+export async function getSpaceTypes(): Promise<string[]> {
+  const { rows } = await pool.query(`
+    SELECT DISTINCT space_type FROM parking_spaces
+    WHERE space_type IS NOT NULL AND space_type <> ''
+    ORDER BY space_type
+  `)
+  return rows.map((r: any) => r.space_type)
 }
 
 // ---------- 车位分布图：某区/全部未售车位 ----------
@@ -816,6 +830,35 @@ export async function getOwnersNotBought(): Promise<NotBoughtOwnerStat[]> {
     ORDER BY o.building_no, o.unit_no, o.room_no
   `)
   return rows as NotBoughtOwnerStat[]
+}
+
+// 按户（楼号-单元号-房号）统计车位：一户几个车位、车位号列表、金额合计
+// 口径与「购买最多业主」一致：仅统计 status IN ('已售','已核销') 的车位
+export async function getHouseSpaceStats(): Promise<HouseSpaceStat[]> {
+  const { rows } = await pool.query(
+    `SELECT building_no, unit_no, room_no, house_key, owner_name,
+            COUNT(*)::int AS space_count,
+            STRING_AGG(space_id, ',' ORDER BY space_id) AS space_ids,
+            COALESCE(SUM(COALESCE(price,0)),0)::numeric AS total_amount
+     FROM parking_spaces
+     WHERE status IN ('已售','已核销')
+       AND owner_name IS NOT NULL AND owner_name <> ''
+     GROUP BY building_no, unit_no, room_no, house_key, owner_name
+     ORDER BY
+       CASE WHEN building_no ~ '^[0-9]+$' THEN building_no::int ELSE 9999 END,
+       CASE WHEN unit_no ~ '^[0-9]+$' THEN unit_no::int ELSE 9999 END,
+       CASE WHEN room_no ~ '^[0-9]+$' THEN room_no::int ELSE 9999 END`
+  )
+  return rows.map((r: any) => ({
+    building_no: r.building_no || '',
+    unit_no: r.unit_no || '',
+    room_no: r.room_no || '',
+    house_key: r.house_key || '',
+    owner_name: r.owner_name || '',
+    space_count: Number(r.space_count),
+    space_ids: r.space_ids || '',
+    total_amount: r.total_amount,
+  })) as HouseSpaceStat[]
 }
 
 // ============================================================

@@ -1,7 +1,8 @@
-import { searchSpaces, getSpaceHistory, getSpaceHistories } from '@/lib/queries'
+import { searchSpaces, getSpaceHistory, getSpaceHistories, getZones, getSpaceTypes } from '@/lib/queries'
 import Link from 'next/link'
 import QueryForm from './query-form'
 import QueryActions from './query-actions'
+import QueryResults from './query-results'
 
 function fmtTime(t?: string | Date): string {
   if (!t) return '-'
@@ -29,8 +30,10 @@ export default async function QueryPage({
   }
   const hasFilter = Object.values(params).some(v => v)
   const results = hasFilter ? await searchSpaces(params) : []
-  const totalCount = results.length
-  const totalAmount = results.reduce((s, r) => s + Number(r.price || 0), 0)
+
+  // 区域 / 车位类型 下拉选项（动态从数据库读取）
+  const zones = await getZones()
+  const spaceTypes = await getSpaceTypes()
 
   // 若以车位号查询，额外拉取该（多）车位按时间顺序的购买 + 调换记录
   // 支持逗号 / 空格 / 换行分隔多个车位号，且每个关键字模糊匹配（ILIKE）
@@ -50,7 +53,7 @@ export default async function QueryPage({
       </header>
 
       <section className="card mb-4 query-no-print">
-        <QueryForm />
+        <QueryForm zones={zones} spaceTypes={spaceTypes} />
       </section>
 
       {hasFilter && (
@@ -60,53 +63,9 @@ export default async function QueryPage({
       {hasFilter && (
         <>
           <QueryActions rows={results} />
-          <section className="card print-area" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>车位号</th><th>区域</th><th>楼栋</th><th>类型</th>
-                  <th>状态</th><th>业主</th><th>电话</th><th>房屋</th><th>价格</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.length === 0 && (
-                  <tr><td colSpan={9} className="text-center text-gray">无匹配结果</td></tr>
-                )}
-                {results.map(s => (
-                  <tr key={s.space_id}>
-                    <td style={{ fontWeight: 600 }}>{s.space_id}</td>
-                    <td>{s.garage_zone}</td>
-                    <td>{s.building_no}</td>
-                    <td>{s.space_type}</td>
-                    <td>
-                      <span className={`badge ${
-                        s.status === '已售' ? 'badge-blue' :
-                        s.status === '预订' ? 'badge-yellow' :
-                        s.status === '团购锁定' ? 'badge-orange' :
-                        s.status === '已核销' ? 'badge-red' : 'badge-gray'
-                      }`}>{s.status}</span>
-                    </td>
-                    <td>{s.owner_name || '-'}</td>
-                    <td>{s.phone || '-'}</td>
-                    <td>{s.house_key || '-'}</td>
-                    <td>{s.price ? '¥' + Number(s.price).toLocaleString() : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {results.length > 0 && (
-                <tfoot>
-                  <tr style={{ fontWeight: 700, background: '#fafafa' }}>
-                    <td colSpan={8}>合计（{totalCount} 个车位）</td>
-                    <td style={{ color: '#fa8c16' }}>¥{totalAmount.toLocaleString()}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        </section>
+          <QueryResults rows={results} />
 
-        {spaceIdPatterns.length > 0 && (
+          {spaceIdPatterns.length > 0 && (
           <section className="card print-area" style={{ marginTop: 16, padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', fontWeight: 600 }}>
               车位「{spaceIdPatterns.join('、')}」历史记录（按时间顺序，共 {spaceHistory.length} 条）

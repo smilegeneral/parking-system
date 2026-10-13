@@ -75,6 +75,8 @@ export default function LoginPage() {
         setError(otp ? '验证码错误或已过期，请重新获取' : '账号或密码错误')
         return
       }
+      // 登录成功：标记本标签页为活跃，避免 SessionGuard 立即把刚登录的会话踢出
+      sessionStorage.setItem('parking_active_session', '1')
       if (username.trim() === 'guest') {
         router.push('/dashboard/distribution')
       } else {
