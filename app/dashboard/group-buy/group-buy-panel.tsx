@@ -35,16 +35,26 @@ export default function GroupBuyPanel({
     if (!v) return
     const c = companies.find((x) => String(x.company_id) === v)
     if (!c) return
-    const [lr, ur] = await Promise.all([
-      fetch(`/api/group-buy/spaces?company=${encodeURIComponent(c.company_name)}`),
-      fetch(`/api/group-buy/spaces`),
-    ])
-    const ld = await lr.json()
-    const ud = await ur.json()
-    const ls = (ld.spaces || []) as any[]
-    const us = (ud.spaces || []) as any[]
-    setLockedSpaces(ls.filter((s: any) => s.status === '团购锁定'))
-    setUnsold(us)
+    try {
+      const [lr, ur] = await Promise.all([
+        fetch(`/api/group-buy/spaces?company=${encodeURIComponent(c.company_name)}`),
+        fetch(`/api/group-buy/spaces`),
+      ])
+      // 会话过期 / 未登录：后端返回 401，跳转登录页
+      if (lr.status === 401 || ur.status === 401) {
+        setMsg({ type: 'err', text: '会话已过期，正在跳转登录…' })
+        setTimeout(() => { window.location.href = '/login' }, 1000)
+        return
+      }
+      const ld = await lr.json()
+      const ud = await ur.json()
+      const ls = (ld.spaces || []) as any[]
+      const us = (ud.spaces || []) as any[]
+      setLockedSpaces(ls.filter((s: any) => s.status === '团购锁定'))
+      setUnsold(us)
+    } catch (e: any) {
+      setMsg({ type: 'err', text: '加载车位失败：' + (e?.message || '请重试') })
+    }
   }
 
   async function submit() {
@@ -59,7 +69,14 @@ export default function GroupBuyPanel({
       setMsg({ type: 'ok', text: `调换成功：${fromSpace} ⇄ ${toSpace}` })
       setTimeout(() => window.location.reload(), 900)
     } catch (e: any) {
-      setMsg({ type: 'err', text: e?.message || '调换失败' })
+      const m = e?.message || ''
+      // 网络/会话问题（如会话过期被中间件拦截）前端常表现为 “Failed to fetch”
+      if (/Failed to fetch|networkerror|network error|网络/i.test(m)) {
+        setMsg({ type: 'err', text: '网络或会话异常，正在跳转登录…' })
+        setTimeout(() => { window.location.href = '/login' }, 1200)
+      } else {
+        setMsg({ type: 'err', text: '❌ ' + m })
+      }
     } finally {
       setSaving(false)
     }
