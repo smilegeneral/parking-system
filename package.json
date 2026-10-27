@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "if [ -n \"$AIVEN_CA\" ]; then printf '%s' \"$AIVEN_CA\" > ca.pem && echo 'ca.pem written from AIVEN_CA'; fi; next build",
+    "build": "node -e \"if(process.env.AIVEN_CA){require('fs').writeFileSync('ca.pem',process.env.AIVEN_CA);console.log('ca.pem written from AIVEN_CA')}\" && next build",
     "start": "next start"
   },
   "dependencies": {
