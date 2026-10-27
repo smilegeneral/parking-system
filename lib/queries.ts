@@ -453,8 +453,10 @@ export async function getNextSwapOrderNo(): Promise<string> {
 }
 
 // 获取下一个团购车位调换单号: TG + 三位数字, 从 TG002 起累加
-export async function getNextGroupSwapOrderNo(): Promise<string> {
-  const { rows } = await pool.query(
+// client 可选：在事务内调用时传入事务 client，避免 max:1 连接池下嵌套 pool.query 死锁
+export async function getNextGroupSwapOrderNo(client?: any): Promise<string> {
+  const db = client ?? pool
+  const { rows } = await db.query(
     `SELECT swap_order_no FROM parking_space_change_log
      WHERE swap_order_no LIKE 'TG%'
      ORDER BY swap_order_no DESC LIMIT 1`
