@@ -114,6 +114,8 @@ export async function withTransaction<T>(
     return result
   } catch (err) {
     await client.query('ROLLBACK')
+    // 打印真实错误到服务端日志，便于在 Vercel 函数日志中定位（生产环境前端不暴露详情）
+    console.error('[withTransaction] rolled back due to error:', err)
     throw err
   } finally {
     client.release()
