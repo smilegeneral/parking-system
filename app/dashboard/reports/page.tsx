@@ -16,18 +16,28 @@ import ReportClient from './report-client'
 export const dynamic = 'force-dynamic'
 
 export default async function ReportsPage() {
+  // 任一查询失败只影响对应分区，不让整页白屏；真实错误打印在服务端日志便于排查
+  const q = async (p: Promise<any>, fallback: any): Promise<any> => {
+    try {
+      return await p
+    } catch (e) {
+      console.error('[reports] query failed:', e)
+      return fallback
+    }
+  }
+
   const [summary, sales, zoneSales, groupCompanies, trend, zones, unsoldByZone, topOwners, notBought, houseSpaces] =
     await Promise.all([
-      getReportSummary(),
-      getSalesComposition(),
-      getZoneSalesBreakdown(),
-      getGroupCompanyStats(),
-      getSalesTrend(),
-      getStatsByZone(),
-      getUnsoldByZone(),
-      getTopOwners(20),
-      getOwnersNotBought(),
-      getHouseSpaceStats(),
+      q(getReportSummary(), { total_sold_amount: '0', total_sold_count: 0, group_verified_count: 0, total_unsold: 0 }),
+      q(getSalesComposition(), { sold_count: 0, sold_amount: '0', retail_count: 0, retail_amount: '0', group_verified_count: 0, group_verified_amount: '0', group_locked_count: 0, group_locked_amount: '0', total_count: 0, total_amount: '0', unsold_count: 0 }),
+      q(getZoneSalesBreakdown(), []),
+      q(getGroupCompanyStats(), []),
+      q(getSalesTrend(), []),
+      q(getStatsByZone(), []),
+      q(getUnsoldByZone(), []),
+      q(getTopOwners(20), []),
+      q(getOwnersNotBought(), []),
+      q(getHouseSpaceStats(), []),
     ])
 
   return (
