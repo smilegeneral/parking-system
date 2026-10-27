@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function GroupBuyPage() {
   // 任一查询失败只影响对应分区，不让整页白屏；真实错误打印在服务端日志便于排查
-  const q = async (p: Promise<any>, fallback: any): Promise<any> => {
+  const q = async <T,>(p: Promise<T>, fallback: T): Promise<T> => {
     try {
       return await p
     } catch (e) {
