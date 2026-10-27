@@ -20,15 +20,24 @@ import Link from 'next/link'
 export const dynamic = 'force-dynamic'
 
 export default async function GroupBuyPage() {
+  // 任一查询失败只影响对应分区，不让整页白屏；真实错误打印在服务端日志便于排查
+  const q = async (p: Promise<any>, fallback: any): Promise<any> => {
+    try {
+      return await p
+    } catch (e) {
+      console.error('[group-buy] query failed:', e)
+      return fallback
+    }
+  }
   const [companies, unsold, purchases, statsByDept, statsByCompany, locked, verifyDetails] =
     await Promise.all([
-      getAllGroupCompanies(),
-      getUnsoldSpacesForGroupBuy(),
-      getGroupBuyPurchases(),
-      getGroupBuyStats('department'),
-      getGroupBuyStats('company'),
-      getSpacesByStatus('团购锁定'),
-      getGroupBuyVerifyDetails(),
+      q(getAllGroupCompanies(), []),
+      q(getUnsoldSpacesForGroupBuy(), []),
+      q(getGroupBuyPurchases(), []),
+      q(getGroupBuyStats('department'), []),
+      q(getGroupBuyStats('company'), []),
+      q(getSpacesByStatus('团购锁定'), []),
+      q(getGroupBuyVerifyDetails(), []),
     ])
 
   return (
