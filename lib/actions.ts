@@ -613,7 +613,7 @@ export async function swapGroupBuySpace(input: GroupSwapInput) {
     }
 
     // 写入车位调换记录表（parking_space_change_log）
-    const swapOrderNo = await getNextGroupSwapOrderNo()
+    const swapOrderNo = await getNextGroupSwapOrderNo(client)
     await client.query(
       `INSERT INTO parking_space_change_log
        (owner_name, phone, old_space_no, old_space_type, old_house_key, old_space_price,

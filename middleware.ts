@@ -19,6 +19,13 @@ export default withAuth(
     const token = req.nextauth.token
     const { pathname } = req.nextUrl
 
+    // 服务端 action（Next.js Server Action 请求带 next-action 头）不做重定向，
+    // 交由各 action 自身的 requireRole 鉴权。否则中间件把 action 的 POST 重定向到
+    // /login，浏览器 fetch 跟随重定向后拿不到 action 响应，前端会报 “Failed to fetch”。
+    if (req.headers.get('next-action')) {
+      return NextResponse.next()
+    }
+
     // 未登录：跳登录页并携带回调地址
     if (!token) {
       const url = new URL('/login', req.url)
@@ -49,7 +56,10 @@ export default withAuth(
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      // 正常页面要求已登录；服务端 action 请求一律放行，由 action 内部鉴权，
+      // 避免 withAuth 在会话过期时把 action POST 重定向到 /login 引发 “Failed to fetch”
+      authorized: ({ req, token }) =>
+        !!token || !!req?.headers?.get?.('next-action'),
     },
     pages: {
       signIn: '/login',

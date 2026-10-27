@@ -453,8 +453,10 @@ export async function getNextSwapOrderNo(): Promise<string> {
 }
 
 // 获取下一个团购车位调换单号: TG + 三位数字, 从 TG002 起累加
-export async function getNextGroupSwapOrderNo(): Promise<string> {
-  const { rows } = await pool.query(
+// client 可选：在事务内调用时传入事务 client，避免 max:1 连接池下嵌套 pool.query 死锁
+export async function getNextGroupSwapOrderNo(client?: any): Promise<string> {
+  const db = client ?? pool
+  const { rows } = await db.query(
     `SELECT swap_order_no FROM parking_space_change_log
      WHERE swap_order_no LIKE 'TG%'
      ORDER BY swap_order_no DESC LIMIT 1`
@@ -839,17 +841,13 @@ export async function getHouseSpaceStats(): Promise<HouseSpaceStat[]> {
     `SELECT building_no, unit_no, room_no, house_key, owner_name,
             COUNT(*)::int AS space_count,
             STRING_AGG(space_id, ',' ORDER BY space_id) AS space_ids,
-            COALESCE(SUM(COALESCE(price,0)),0)::numeric AS total_amount
+            COALESCE(SUM(COALESCE(price,0)),0) AS total_amount
      FROM parking_spaces
      WHERE status IN ('已售','已核销')
        AND owner_name IS NOT NULL AND owner_name <> ''
-     GROUP BY building_no, unit_no, room_no, house_key, owner_name
-     ORDER BY
-       CASE WHEN building_no ~ '^[0-9]+$' THEN building_no::int ELSE 9999 END,
-       CASE WHEN unit_no ~ '^[0-9]+$' THEN unit_no::int ELSE 9999 END,
-       CASE WHEN room_no ~ '^[0-9]+$' THEN room_no::int ELSE 9999 END`
+     GROUP BY building_no, unit_no, room_no, house_key, owner_name`
   )
-  return rows.map((r: any) => ({
+  const list = (rows as any[]).map(r => ({
     building_no: r.building_no || '',
     unit_no: r.unit_no || '',
     room_no: r.room_no || '',
@@ -859,6 +857,19 @@ export async function getHouseSpaceStats(): Promise<HouseSpaceStat[]> {
     space_ids: r.space_ids || '',
     total_amount: r.total_amount,
   })) as HouseSpaceStat[]
+  // 取数后在 JS 中按楼号/单元/房号的数字序排序（避免 SQL 类型转换相关问题）
+  const leadNum = (s: string) => {
+    const m = (s || '').match(/\d+/)
+    return m ? parseInt(m[0], 10) : 99999
+  }
+  list.sort(
+    (a, b) =>
+      leadNum(a.building_no) - leadNum(b.building_no) ||
+      leadNum(a.unit_no) - leadNum(a.unit_no) ||
+      leadNum(a.room_no) - leadNum(a.room_no) ||
+      (a.house_key || '').localeCompare(b.house_key || '')
+  )
+  return list
 }
 
 // ============================================================

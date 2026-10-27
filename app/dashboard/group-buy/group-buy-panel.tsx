@@ -23,6 +23,7 @@ export default function GroupBuyPanel({
   const [fromSpace, setFromSpace] = useState('')
   const [unsold, setUnsold] = useState<any[]>([])
   const [toSpace, setToSpace] = useState('')
+  const [toMsg, setToMsg] = useState('') // 换入车位校验提示
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -35,31 +36,63 @@ export default function GroupBuyPanel({
     if (!v) return
     const c = companies.find((x) => String(x.company_id) === v)
     if (!c) return
-    const [lr, ur] = await Promise.all([
-      fetch(`/api/group-buy/spaces?company=${encodeURIComponent(c.company_name)}`),
-      fetch(`/api/group-buy/spaces`),
-    ])
-    const ld = await lr.json()
-    const ud = await ur.json()
-    const ls = (ld.spaces || []) as any[]
-    const us = (ud.spaces || []) as any[]
-    setLockedSpaces(ls.filter((s: any) => s.status === '团购锁定'))
-    setUnsold(us)
+    try {
+      const [lr, ur] = await Promise.all([
+        fetch(`/api/group-buy/spaces?company=${encodeURIComponent(c.company_name)}`),
+        fetch(`/api/group-buy/spaces`),
+      ])
+      // 会话过期 / 未登录：后端返回 401，跳转登录页
+      if (lr.status === 401 || ur.status === 401) {
+        setMsg({ type: 'err', text: '会话已过期，正在跳转登录…' })
+        setTimeout(() => { window.location.href = '/login' }, 1000)
+        return
+      }
+      const ld = await lr.json()
+      const ud = await ur.json()
+      const ls = (ld.spaces || []) as any[]
+      const us = (ud.spaces || []) as any[]
+      setLockedSpaces(ls.filter((s: any) => s.status === '团购锁定'))
+      setUnsold(us)
+    } catch (e: any) {
+      setMsg({ type: 'err', text: '加载车位失败：' + (e?.message || '请重试') })
+    }
+  }
+
+  // 换入车位手动输入：实时校验是否为未售车位
+  function handleToSpaceChange(v: string) {
+    setToSpace(v)
+    const key = v.trim()
+    if (!key) {
+      setToMsg('')
+      return
+    }
+    const sp = unsold.find((s) => s.space_id === key)
+    setToMsg(sp ? '' : `车位 ${key} 不是未售车位，无法换入`)
   }
 
   async function submit() {
     setMsg(null)
     if (!companyId) { setMsg({ type: 'err', text: '请选择团购公司' }); return }
     if (!fromSpace) { setMsg({ type: 'err', text: '请选择要换出的团购锁定车位' }); return }
-    if (!toSpace) { setMsg({ type: 'err', text: '请选择换入的未售车位' }); return }
-    if (fromSpace === toSpace) { setMsg({ type: 'err', text: '换出与换入车位不能相同' }); return }
+    if (!toSpace.trim()) { setMsg({ type: 'err', text: '请输入换入的未售车位' }); return }
+    if (!unsold.find((s) => s.space_id === toSpace.trim())) {
+      setMsg({ type: 'err', text: `车位 ${toSpace.trim()} 不是未售车位，无法换入` }); return
+    }
+    if (fromSpace === toSpace.trim()) { setMsg({ type: 'err', text: '换出与换入车位不能相同' }); return }
     setSaving(true)
     try {
-      await swapGroupBuySpace({ from_space_id: fromSpace, to_space_id: toSpace, operator: 'admin' })
+      await swapGroupBuySpace({ from_space_id: fromSpace, to_space_id: toSpace.trim(), operator: 'admin' })
       setMsg({ type: 'ok', text: `调换成功：${fromSpace} ⇄ ${toSpace}` })
       setTimeout(() => window.location.reload(), 900)
     } catch (e: any) {
-      setMsg({ type: 'err', text: e?.message || '调换失败' })
+      const m = e?.message || ''
+      // 网络/会话问题（如会话过期被中间件拦截）前端常表现为 “Failed to fetch”
+      if (/Failed to fetch|networkerror|network error|网络/i.test(m)) {
+        setMsg({ type: 'err', text: '网络或会话异常，正在跳转登录…' })
+        setTimeout(() => { window.location.href = '/login' }, 1200)
+      } else {
+        setMsg({ type: 'err', text: '❌ ' + m })
+      }
     } finally {
       setSaving(false)
     }
@@ -87,13 +120,23 @@ export default function GroupBuyPanel({
           </select>
         </div>
         <div>
-          <label className="text-sm" style={{ display: 'block', marginBottom: 4 }}>换入车位（未售）</label>
-          <select value={toSpace} onChange={(e) => setToSpace(e.target.value)} style={sel} disabled={!companyId}>
-            <option value="">— 选择未售车位 —</option>
+          <label className="text-sm" style={{ display: 'block', marginBottom: 4 }}>换入车位（未售，手动输入）</label>
+          <input
+            value={toSpace}
+            onChange={(e) => handleToSpaceChange(e.target.value)}
+            list="gb-unsold-spaces"
+            style={sel}
+            disabled={!companyId}
+            placeholder="输入或选择未售车位号"
+          />
+          <datalist id="gb-unsold-spaces">
             {unsold.map((s) => (
-              <option key={s.space_id} value={s.space_id}>{s.space_id}</option>
+              <option key={s.space_id} value={s.space_id}>{s.space_type || ''}</option>
             ))}
-          </select>
+          </datalist>
+          {toMsg && (
+            <div style={{ marginTop: 4, color: '#ff4d4f', fontSize: 12 }}>{toMsg}</div>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
           <button className="btn btn-primary" onClick={submit} disabled={saving || !companyId}>
