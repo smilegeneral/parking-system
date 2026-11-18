@@ -542,6 +542,8 @@ export async function swapSpace(input: SwapInput) {
     if (newS.rowCount === 0) throw new Error(`目标车位 ${input.new_space_id} 不存在`)
 
     const targetSpace = newS.rows[0]
+    // 原车位开票状态：调换后由新车位继承，原车位恢复「未开票」
+    const oldInvoiceStatus = oldS.rows[0].invoice_status || '未开票'
     // swap_type 约束允许值: '加钱换车位' / '平换车位'
     // 加钱换车位: 目标必须为未售; 平换车位(含业主间互换/团购互换): 允许目标已售
     if (targetSpace.status !== '未售' && input.swap_type !== '平换车位') {
@@ -593,17 +595,18 @@ export async function swapSpace(input: SwapInput) {
       ]
     )
 
-    // 原车位 → 未售，并清空楼栋/单元/房间及员工字段
+    // 原车位 → 未售，开票状态恢复「未开票」，并清空楼栋/单元/房间及员工字段
     await client.query(
       `UPDATE parking_spaces
        SET status = '未售', owner_name = '', phone = '',
            house_key = '', building_no = '', unit_no = '', room_no = '', employee_name = '',
+           invoice_status = '未开票',
            updated_at = NOW()
        WHERE space_id = $1`,
       [input.old_space_id]
     )
 
-    // 新车位 → 已售（同时拆分 HOUSEKEY 填入 building_no/unit_no/room_no）
+    // 新车位 → 已售并继承原车位开票状态（同时拆分 HOUSEKEY 填入 building_no/unit_no/room_no）
     const swapHk = parseHouseKey(input.house_key)
     await client.query(
       `UPDATE parking_spaces
@@ -611,12 +614,14 @@ export async function swapSpace(input: SwapInput) {
            house_key = $3, price = $4, sale_date = NOW(),
            confirm_no = $5,
            building_no = $6, unit_no = $7, room_no = $8,
+           invoice_status = $9,
            updated_at = NOW()
-       WHERE space_id = $9`,
+       WHERE space_id = $10`,
       [
         input.owner_name, input.phone, input.house_key,
         input.new_space_price ? Number(input.new_space_price) : null, input.new_receipt_no || '',
-        swapHk.building_no, swapHk.unit_no, swapHk.room_no, input.new_space_id,
+        swapHk.building_no, swapHk.unit_no, swapHk.room_no,
+        oldInvoiceStatus, input.new_space_id,
       ]
     )
 
@@ -628,6 +633,24 @@ export async function swapSpace(input: SwapInput) {
        WHERE house_key = $3`,
       [input.old_space_id, input.new_space_id, input.house_key]
     )
+
+    // 若原车位已开票，同步把有效开票登记表里的旧车位号换成新车位号，
+    // 保证日后作废该发票时回退的是新车位；并重算业主开票统计。
+    if (oldInvoiceStatus === '已开票') {
+      const invRes = await client.query(
+        `SELECT invoice_id, space_no FROM invoice_records WHERE status = '已开票'`
+      )
+      for (const inv of invRes.rows) {
+        const parts = String(inv.space_no || '').split(/[,，]/).map(s => s.trim()).filter(Boolean)
+        if (!parts.includes(input.old_space_id)) continue
+        const updated = parts.map(s => s === input.old_space_id ? input.new_space_id : s).join(',')
+        await client.query(
+          `UPDATE invoice_records SET space_no = $1, updated_at = NOW() WHERE invoice_id = $2`,
+          [updated, inv.invoice_id]
+        )
+      }
+      await recalcOwnerInvoiceCounts(client, input.house_key)
+    }
 
     return { swap_order_no: swapOrderNo }
     })
