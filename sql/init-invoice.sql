@@ -22,7 +22,7 @@ UPDATE owner_info SET uninvoiced_count = 0 WHERE uninvoiced_count IS NULL;
 CREATE TABLE IF NOT EXISTS invoice_records (
   invoice_id      SERIAL PRIMARY KEY,
   invoice_no      VARCHAR(50) UNIQUE,          -- 发票登记单号 FP001...
-  space_no        VARCHAR(20),                 -- 车位号
+  space_no        VARCHAR(500),                -- 车位号（一张发票多车位时逗号分隔）
   house_key       VARCHAR(30),                 -- 房号组合键
   owner_name      VARCHAR(100),
   phone           VARCHAR(20),
@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS invoice_records (
   created_at      TIMESTAMP DEFAULT NOW(),
   updated_at      TIMESTAMP DEFAULT NOW()
 );
+-- 兼容已建表：发票一行对应一个业主的多个车位，space_no 需容纳逗号分隔的车位号列表
+ALTER TABLE invoice_records ALTER COLUMN space_no TYPE VARCHAR(500);
+
 CREATE INDEX IF NOT EXISTS idx_inv_space  ON invoice_records(space_no);
 CREATE INDEX IF NOT EXISTS idx_inv_house  ON invoice_records(house_key);
 CREATE INDEX IF NOT EXISTS idx_inv_status ON invoice_records(status);

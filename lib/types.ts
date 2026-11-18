@@ -193,19 +193,17 @@ export interface InvoiceRecord {
   updated_at: string
 }
 
-// 批量导入：一行 Excel 对应的字段（表头见前端模板）
+// 批量导入：一行 Excel = 一张发票 = 一个业主（housekey）+ 多个车位
+// 表头：housekey / 开票日期 / 发票号 / 价税合计额 / 车位号 / 车位号2 / 车位号3 / 车位号4
 export interface InvoiceImportRow {
-  invoice_no?: string        // 登记单号，留空则自动生成 FPxxx
+  house_key: string          // housekey（必填，用于归属业主与统计）
+  invoice_date: string       // 开票日期（支持「2026年10月22日」或 YYYY-MM-DD）
+  invoice_no: string         // 发票号（必填，作为唯一登记单号，防重复导入）
+  amount: number | string    // 价税合计额（支持带千分位，如 "80,000.00"）
   space_no: string           // 车位号（必填）
-  house_key?: string         // 房号（可留空，取车位上的房号）
-  owner_name?: string        // 业主（可留空，取车位上的业主）
-  phone?: string
-  amount?: number | string   // 开票金额（可留空，取车位价格）
-  invoice_type?: string      // 专票/普票/普票个人，默认普票
-  invoice_code?: string
-  invoice_number?: string
-  invoice_date?: string      // YYYY-MM-DD，留空取今天
-  remarks?: string
+  space_no2?: string         // 车位号2（选填）
+  space_no3?: string         // 车位号3（选填）
+  space_no4?: string         // 车位号4（选填）
 }
 
 export interface InvoiceImportError {
