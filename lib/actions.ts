@@ -1,6 +1,6 @@
 'use server'
 import { withTransaction } from './db'
-import { getSpaceById, getOwnerSoldSpaces, getOldReceiptNo, insertLifecycleLog, getUnsoldSpaces, getNextGroupSwapOrderNo } from './queries'
+import { getSpaceById, getOwnerSoldSpaces, getOldReceiptNo, insertLifecycleLog, getUnsoldSpaces, getNextGroupSwapOrderNo, getInvoiceableSpaces } from './queries'
 import { getServerSession } from 'next-auth'
 import { auth, authOptions } from './auth'
 import { requireRole } from './guard'
@@ -195,6 +195,27 @@ export async function confirmRetailSale(input: RetailSaleInput, _operator: strin
   })
 }
 
+// 依据 parking_spaces.invoice_status 重算业主开票统计（销售/核销/发票登记后统一调用，保证计数一致）
+async function recalcOwnerInvoiceCounts(client: any, houseKey: string | null | undefined) {
+  if (!houseKey) return
+  await client.query(
+    `UPDATE owner_info o
+        SET invoiced_count = (
+              SELECT COUNT(*) FROM parking_spaces p
+               WHERE p.house_key = o.house_key AND p.invoice_status = '已开票'
+            ),
+            uninvoiced_count = (
+              SELECT COUNT(*) FROM parking_spaces p
+               WHERE p.house_key = o.house_key
+                 AND p.status IN ('已售','已核销')
+                 AND COALESCE(p.invoice_status,'未开票') = '未开票'
+            ),
+            updated_at = NOW()
+      WHERE o.house_key = $1`,
+    [houseKey]
+  )
+}
+
 // ==================== 业主信息 upsert 辅助 ====================
 async function upsertOwner(
   client: any,
@@ -235,6 +256,121 @@ async function upsertOwner(
       ]
     )
   }
+  // 新增车位后同步开票统计（销售 / 团购核销新增车位默认未开票）
+  await recalcOwnerInvoiceCounts(client, data.house_key)
+}
+
+// ==================== 发票开取登记 ====================
+// 查询可登记发票的车位（已售 / 已核销 且未开票），供登记表单搜索选择
+export async function lookupInvoiceableSpaces(keyword: string) {
+  if (!await requireRole(ROLE_SALE)) return unauthorized('查询待开票车位')
+  const spaces = await getInvoiceableSpaces(keyword, 100)
+  return { ok: true, spaces }
+}
+
+export interface RegisterInvoiceInput {
+  invoice_no: string
+  space_id: string
+  house_key: string
+  owner_name: string
+  phone: string
+  amount: number
+  invoice_type: string
+  invoice_code?: string
+  invoice_number?: string
+  invoice_date?: string
+  remarks?: string
+  operator?: string
+}
+
+export async function registerInvoice(input: RegisterInvoiceInput) {
+  if (!await requireRole(ROLE_SALE)) return unauthorized('发票开取登记')
+  return withTransaction(async (client) => {
+    const spaceRes = await client.query(`SELECT * FROM parking_spaces WHERE space_id = $1`, [input.space_id])
+    if (spaceRes.rowCount === 0) throw new Error('车位不存在')
+    const space = spaceRes.rows[0] as ParkingSpace
+    if (space.status !== '已售' && space.status !== '已核销') {
+      throw new Error(`车位状态为「${space.status}」，仅已售 / 已核销车位可登记发票`)
+    }
+    if (space.invoice_status === '已开票') {
+      throw new Error('该车位已登记开票，如需重开请先作废原登记')
+    }
+
+    const invoiceNo = (input.invoice_no || '').trim()
+    if (!invoiceNo) throw new Error('请填写发票登记单号')
+    const dup = await client.query(
+      `SELECT 1 FROM invoice_records WHERE invoice_no = $1 LIMIT 1`, [invoiceNo]
+    )
+    if (dup.rowCount && dup.rowCount > 0) {
+      throw new Error(`登记单号 ${invoiceNo} 已存在，请更换`)
+    }
+
+    await client.query(
+      `INSERT INTO invoice_records
+       (invoice_no, space_no, house_key, owner_name, phone, amount, invoice_type,
+        invoice_code, invoice_number, invoice_date, status, remarks, operator, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10::date, CURRENT_DATE),'已开票',$11,$12,NOW(),NOW())`,
+      [
+        invoiceNo, input.space_id, input.house_key || space.house_key || '',
+        input.owner_name, input.phone, Number(input.amount || 0), input.invoice_type || '普票',
+        input.invoice_code || '', input.invoice_number || '', input.invoice_date || null,
+        input.remarks || '', input.operator || '',
+      ]
+    )
+    await client.query(
+      `UPDATE parking_spaces SET invoice_status = '已开票', updated_at = NOW() WHERE space_id = $1`,
+      [input.space_id]
+    )
+    await recalcOwnerInvoiceCounts(client, input.house_key || space.house_key)
+
+    return {
+      ok: true,
+      invoice_no: invoiceNo,
+      space_id: input.space_id,
+      owner_name: input.owner_name,
+      house_key: input.house_key || space.house_key || '',
+      amount: Number(input.amount || 0),
+      invoice_type: input.invoice_type || '普票',
+      invoice_code: input.invoice_code || '',
+      invoice_number: input.invoice_number || '',
+      invoice_date: input.invoice_date || new Date().toISOString().slice(0, 10),
+      remarks: input.remarks || '',
+      operator: input.operator || '',
+    }
+  })
+}
+
+// 作废发票登记：管理员专属；车位无其他有效登记时回退为未开票并重算业主统计
+export async function cancelInvoice(invoiceId: number) {
+  if (!await requireRole(ROLE_ADMIN)) return unauthorized('发票登记作废')
+  return withTransaction(async (client) => {
+    const res = await client.query(`SELECT * FROM invoice_records WHERE invoice_id = $1`, [invoiceId])
+    if (res.rowCount === 0) throw new Error('发票登记不存在')
+    const rec = res.rows[0]
+    if (rec.status !== '已开票') throw new Error('该登记已作废，无需重复操作')
+
+    await client.query(
+      `UPDATE invoice_records
+          SET status = '已作废',
+              remarks = CONCAT(COALESCE(remarks,''), ' [已作废]'),
+              updated_at = NOW()
+        WHERE invoice_id = $1`,
+      [invoiceId]
+    )
+    const other = await client.query(
+      `SELECT 1 FROM invoice_records
+        WHERE space_no = $1 AND status = '已开票' AND invoice_id <> $2 LIMIT 1`,
+      [rec.space_no, invoiceId]
+    )
+    if (!other.rowCount) {
+      await client.query(
+        `UPDATE parking_spaces SET invoice_status = '未开票', updated_at = NOW() WHERE space_id = $1`,
+        [rec.space_no]
+      )
+    }
+    await recalcOwnerInvoiceCounts(client, rec.house_key)
+    return { ok: true, invoice_id: invoiceId }
+  })
 }
 
 // ==================== 车位调换 ====================

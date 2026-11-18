@@ -50,6 +50,7 @@ export interface ParkingSpace {
   remarks: string          // 备注
   is_group_buy: boolean    // 是否团购
   group_company: string    // 团购公司名
+  invoice_status: string   // 开票状态：未开票 / 已开票
   created_at: string
   updated_at: string
 }
@@ -76,6 +77,8 @@ export interface OwnerInfo {
   parking_spaces: string   // 拥有的车位编号，逗号分隔
   change_record: string    // 变更记录
   parking_price: number   // 车位总价
+  invoiced_count: number    // 已开票车位数量
+  uninvoiced_count: number  // 未开票车位数量
   created_at: string
   updated_at: string
 }
@@ -165,6 +168,37 @@ export interface ParkingSaleRecord {
   updated_at: string
   process_result: string
   preview_url: string
+}
+
+// ---------- 发票开取登记 invoice_records ----------
+export const INVOICE_TYPES = ['专票', '普票', '普票个人'] as const
+export type InvoiceType = (typeof INVOICE_TYPES)[number]
+
+export interface InvoiceRecord {
+  invoice_id: number
+  invoice_no: string        // 登记单号 FP001...
+  space_no: string          // 车位号
+  house_key: string         // 房号
+  owner_name: string
+  phone: string
+  amount: number            // 开票金额
+  invoice_type: string      // 专票/普票/普票个人
+  invoice_code: string      // 发票代码
+  invoice_number: string    // 发票号码
+  invoice_date: string      // 开票日期
+  status: string            // 已开票/已作废
+  remarks: string
+  operator: string
+  created_at: string
+  updated_at: string
+}
+
+// 发票统计汇总（页面顶部）
+export interface InvoiceSummary {
+  invoiced_spaces: number     // 已开票车位数
+  uninvoiced_spaces: number   // 未开票车位数
+  invoice_count: number       // 有效登记笔数
+  invoice_amount: number      // 有效开票金额合计
 }
 
 // ---------- 车位调换日志 parking_space_change_log ----------
@@ -266,6 +300,7 @@ export type Permission =
   | 'owners'     // 业主信息
   | 'users'      // 用户/角色管理
   | 'print'      // 表单打印
+  | 'invoice'    // 发票开取登记
 
 export interface AdminUser {
   id: number
@@ -285,6 +320,7 @@ export const ALL_PERMISSIONS: { code: Permission; label: string }[] = [
   { code: 'owners', label: '业主信息变更' },
   { code: 'users', label: '用户与角色管理' },
   { code: 'print', label: '表单打印' },
+  { code: 'invoice', label: '发票开取登记' },
 ]
 
 export const ROLE_LABELS: Record<number, string> = {

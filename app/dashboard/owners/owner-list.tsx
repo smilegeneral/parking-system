@@ -117,6 +117,12 @@ export default function OwnerList({
                       {o.parking_count} 车位
                       {o.parking_spaces ? `（${o.parking_spaces}）` : ''}
                     </span>
+                    <span className="text-sm" style={{ marginLeft: 10, color: '#16a34a' }}>
+                      已开票 {o.invoiced_count ?? 0}
+                    </span>
+                    <span className="text-sm" style={{ marginLeft: 6, color: '#d97706' }}>
+                      未开票 {o.uninvoiced_count ?? 0}
+                    </span>
                   </div>
                   {editing === o.house_key ? (
                     <button

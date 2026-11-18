@@ -26,6 +26,8 @@ import type {
   NotBoughtOwnerStat,
   HouseSpaceStat,
   ZoneStat,
+  InvoiceRecord,
+  InvoiceSummary,
 } from './types'
 
 // ============================================================
@@ -482,6 +484,80 @@ export async function getNextSaleOrderNo(): Promise<string> {
     if (m) next = parseInt(m[1], 10) + 1
   }
   return `S${String(next).padStart(3, '0')}`
+}
+
+// ---------- 发票开取登记 ----------
+export async function getInvoiceRecords(limit = 200): Promise<InvoiceRecord[]> {
+  const { rows } = await pool.query(
+    `SELECT * FROM invoice_records ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  )
+  return rows as InvoiceRecord[]
+}
+
+// 模糊查询发票记录：车位号 / 房号 / 业主 / 登记单号 / 发票号码 任意匹配
+export async function searchInvoiceRecords(keyword?: string, limit = 500): Promise<InvoiceRecord[]> {
+  const kw = (keyword || '').trim()
+  if (!kw) return getInvoiceRecords(limit)
+  const { rows } = await pool.query(
+    `SELECT * FROM invoice_records
+     WHERE space_no ILIKE $1 OR house_key ILIKE $1 OR owner_name ILIKE $1
+        OR invoice_no ILIKE $1 OR COALESCE(invoice_number,'') ILIKE $1
+        OR COALESCE(invoice_code,'') ILIKE $1
+     ORDER BY created_at DESC LIMIT $2`,
+    [`%${kw}%`, limit]
+  )
+  return rows as InvoiceRecord[]
+}
+
+// 下一个发票登记单号：FP + 三位数字，取库中 FP 前缀最大序号 +1
+export async function getNextInvoiceOrderNo(): Promise<string> {
+  const { rows } = await pool.query(
+    `SELECT invoice_no FROM invoice_records WHERE invoice_no LIKE 'FP%'
+     ORDER BY invoice_no DESC LIMIT 1`
+  )
+  let next = 1
+  if (rows.length > 0) {
+    const m = /FP(\d+)/.exec(rows[0].invoice_no || '')
+    if (m) next = parseInt(m[1], 10) + 1
+  }
+  return `FP${String(next).padStart(3, '0')}`
+}
+
+// 发票统计汇总：以车位开票状态为准（登记作废会自动回退状态）
+export async function getInvoiceSummary(): Promise<InvoiceSummary> {
+  const { rows } = await pool.query(
+    `SELECT
+       (SELECT COUNT(*) FROM parking_spaces WHERE invoice_status = '已开票')::int AS invoiced_spaces,
+       (SELECT COUNT(*) FROM parking_spaces
+         WHERE status IN ('已售','已核销') AND COALESCE(invoice_status,'未开票') = '未开票')::int AS uninvoiced_spaces,
+       (SELECT COUNT(*) FROM invoice_records WHERE status = '已开票')::int AS invoice_count,
+       (SELECT COALESCE(SUM(amount),0) FROM invoice_records WHERE status = '已开票')::numeric AS invoice_amount`
+  )
+  const r = rows[0] || {}
+  return {
+    invoiced_spaces: Number(r.invoiced_spaces || 0),
+    uninvoiced_spaces: Number(r.uninvoiced_spaces || 0),
+    invoice_count: Number(r.invoice_count || 0),
+    invoice_amount: Number(r.invoice_amount || 0),
+  }
+}
+
+// 可登记发票的车位（已售 / 已核销 且未开票），支持车位号 / 房号 / 业主筛选
+export async function getInvoiceableSpaces(keyword?: string, limit = 200): Promise<ParkingSpace[]> {
+  const kw = (keyword || '').trim()
+  const where = [`status IN ('已售','已核销')`, `COALESCE(invoice_status,'未开票') = '未开票'`]
+  const params: any[] = []
+  if (kw) {
+    params.push(`%${kw}%`)
+    where.push(`(space_id ILIKE $${params.length} OR house_key ILIKE $${params.length} OR owner_name ILIKE $${params.length})`)
+  }
+  params.push(limit)
+  const { rows } = await pool.query(
+    `SELECT * FROM parking_spaces WHERE ${where.join(' AND ')} ORDER BY space_id LIMIT $${params.length}`,
+    params
+  )
+  return rows as ParkingSpace[]
 }
 
 export async function getChangeLogs(limit = 50): Promise<SpaceChangeLog[]> {
