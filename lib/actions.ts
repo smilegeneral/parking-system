@@ -357,16 +357,23 @@ export async function cancelInvoice(invoiceId: number) {
         WHERE invoice_id = $1`,
       [invoiceId]
     )
-    const other = await client.query(
-      `SELECT 1 FROM invoice_records
-        WHERE space_no = $1 AND status = '已开票' AND invoice_id <> $2 LIMIT 1`,
-      [rec.space_no, invoiceId]
-    )
-    if (!other.rowCount) {
-      await client.query(
-        `UPDATE parking_spaces SET invoice_status = '未开票', updated_at = NOW() WHERE space_id = $1`,
-        [rec.space_no]
+    // space_no 可能是单个车位号，也可能是批量补录的逗号分隔多车位（如 "A-140,A-141"）
+    const spaceIds = String(rec.space_no || '').split(/[,，]/).map(s => s.trim()).filter(Boolean)
+    for (const spaceId of spaceIds) {
+      // 仅当该车位没有其他有效开票登记时才回退状态（用数组包含匹配，兼容多车位记录）
+      const others = await client.query(
+        `SELECT space_no FROM invoice_records
+          WHERE status = '已开票' AND invoice_id <> $1`, [invoiceId]
       )
+      const stillInvoiced = others.rows.some((o: any) =>
+        String(o.space_no || '').split(/[,，]/).map(s => s.trim()).includes(spaceId)
+      )
+      if (!stillInvoiced) {
+        await client.query(
+          `UPDATE parking_spaces SET invoice_status = '未开票', updated_at = NOW() WHERE space_id = $1`,
+          [spaceId]
+        )
+      }
     }
     await recalcOwnerInvoiceCounts(client, rec.house_key)
     return { ok: true, invoice_id: invoiceId }

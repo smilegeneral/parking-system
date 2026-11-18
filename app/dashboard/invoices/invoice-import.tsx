@@ -119,9 +119,10 @@ export default function InvoiceImport() {
 
   return (
     <div style={{ borderTop: '1px solid #eee', paddingTop: 16, marginTop: 16 }}>
-      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>📥 批量导入已开票</h2>
+      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>📥 前期发票补录（批量导入）</h2>
       <p className="text-sm text-gray" style={{ marginBottom: 12 }}>
-        按「一张发票 = 一个业主(housekey) + 多个车位」导入：下载模板填写后上传，系统校验发票号唯一、车位状态与金额日期。
+        仅用于<strong>前期销售后补开发票</strong>：一张发票可按一个业主(housekey)对应多个车位批量导入。
+        <span style={{ color: '#d97706' }}> 日常新销售请勿用此处</span>——请在上方的「发票登记」中先确认车位销售，再按「一个车位一张发票」逐笔登记。
       </p>
 
       <div className="flex" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

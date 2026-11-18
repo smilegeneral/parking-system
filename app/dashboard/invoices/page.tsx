@@ -33,7 +33,9 @@ export default async function InvoicesPage() {
       <header className="flex mb-4" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>🧾 发票开取登记</h1>
-          <p className="text-sm text-gray">登记车位开票信息，同步更新车位开票状态与业主开票统计</p>
+          <p className="text-sm text-gray">
+            日常：先销售车位，再在上方逐车位登记（一车位一发票）；前期已售车位补开发票用下方批量导入（一票可含多车位）
+          </p>
         </div>
         <Link href="/dashboard" style={{ fontSize: 14 }}>← 返回</Link>
       </header>
