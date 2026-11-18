@@ -6,7 +6,7 @@ import { auth, authOptions } from './auth'
 import { requireRole } from './guard'
 import { encryptApiKey, maskApiKey, canEncrypt } from './ai-crypto'
 import { presetOf } from './ai-presets'
-import type { ParkingSpace } from './types'
+import type { ParkingSpace, InvoiceImportRow, InvoiceImportResult, InvoiceImportError } from './types'
 import { groupBuyOrderNo, groupBuyVerifyOrderNo } from './types'
 
 // 角色等级常量（与 lib/types 保持一致）：0=访客 1=销售员 2=管理员 3=超级管理员
@@ -370,6 +370,132 @@ export async function cancelInvoice(invoiceId: number) {
     }
     await recalcOwnerInvoiceCounts(client, rec.house_key)
     return { ok: true, invoice_id: invoiceId }
+  })
+}
+
+// ==================== 发票开取登记：批量导入 ====================
+// 先整批校验（车位存在/已售未开票/单号不重复/金额日期合法），再统一写入；
+// 任一行不合法则返回全部错误明细且不写入任何数据，用户修正后重导。
+export async function importInvoices(rows: InvoiceImportRow[]): Promise<InvoiceImportResult> {
+  if (!await requireRole(ROLE_SALE)) return unauthorized('发票批量导入')
+  const list = Array.isArray(rows) ? rows : []
+  if (list.length === 0) return { ok: false, total: 0, success: 0, errors: [{ row: 0, message: '无数据行' }] }
+  if (list.length > 500) return { ok: false, total: list.length, success: 0, errors: [{ row: 0, message: '单次最多导入 500 行' }] }
+
+  return withTransaction(async (client) => {
+    const errors: InvoiceImportError[] = []
+    const prepared: {
+      row: number; invoice_no: string; space_id: string; house_key: string;
+      owner_name: string; phone: string; amount: number; invoice_type: string;
+      invoice_code: string; invoice_number: string; invoice_date: string; remarks: string;
+    }[] = []
+    const usedNos = new Set<string>()
+    const usedSpaces = new Set<string>()
+
+    // 自动生成单号时，取库中当前最大 FP 序号作为起点（事务内用 client，避免池 max=1 死锁）
+    const noRes = await client.query(`SELECT invoice_no FROM invoice_records WHERE invoice_no LIKE 'FP%' ORDER BY invoice_no DESC LIMIT 1`)
+    let autoSeq = 1
+    if (noRes.rowCount) {
+      const m = /FP(\d+)/.exec(noRes.rows[0].invoice_no || '')
+      if (m) autoSeq = parseInt(m[1], 10) + 1
+    }
+
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i]
+      const rowNo = i + 2 // Excel 行号：第 1 行为表头
+      const spaceId = String(r.space_no || '').trim()
+      if (!spaceId) { errors.push({ row: rowNo, message: '车位号为空' }); continue }
+
+      const spRes = await client.query(
+        `SELECT space_id, house_key, owner_name, phone, price, status, invoice_status FROM parking_spaces WHERE space_id = $1`,
+        [spaceId]
+      )
+      if (!spRes.rowCount) { errors.push({ row: rowNo, message: `车位 ${spaceId} 不存在` }); continue }
+      const sp = spRes.rows[0]
+      if (sp.status !== '已售' && sp.status !== '已核销') {
+        errors.push({ row: rowNo, message: `车位 ${spaceId} 状态为「${sp.status}」，非已售/已核销` }); continue
+      }
+      if (sp.invoice_status === '已开票') {
+        errors.push({ row: rowNo, message: `车位 ${spaceId} 已开票，无需重复导入` }); continue
+      }
+      if (usedSpaces.has(spaceId)) {
+        errors.push({ row: rowNo, message: `车位 ${spaceId} 在本批次中重复` }); continue
+      }
+
+      // 单号：指定则用指定值，留空则自动生成
+      let invoiceNo = String(r.invoice_no || '').trim()
+      if (invoiceNo) {
+        const dup = await client.query(`SELECT 1 FROM invoice_records WHERE invoice_no = $1 LIMIT 1`, [invoiceNo])
+        if (dup.rowCount || usedNos.has(invoiceNo)) {
+          errors.push({ row: rowNo, message: `登记单号 ${invoiceNo} 已存在（库中或本批次重复）` }); continue
+        }
+      } else {
+        do { invoiceNo = `FP${String(autoSeq++).padStart(3, '0')}` }
+        while (usedNos.has(invoiceNo) || (await client.query(`SELECT 1 FROM invoice_records WHERE invoice_no = $1 LIMIT 1`, [invoiceNo])).rowCount)
+      }
+      usedNos.add(invoiceNo)
+      usedSpaces.add(spaceId)
+
+      const amount = r.amount === undefined || r.amount === '' || r.amount === null
+        ? Number(sp.price || 0)
+        : Number(r.amount)
+      if (!Number.isFinite(amount) || amount < 0) {
+        errors.push({ row: rowNo, message: `开票金额「${r.amount}」无效` }); continue
+      }
+
+      const rawDate = String(r.invoice_date || '').trim()
+      let invoiceDate = rawDate || new Date().toISOString().slice(0, 10)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) {
+        errors.push({ row: rowNo, message: `开票日期「${rawDate}」格式应为 YYYY-MM-DD` }); continue
+      }
+
+      const invoiceType = String(r.invoice_type || '').trim() || '普票'
+      if (!['专票', '普票', '普票个人'].includes(invoiceType)) {
+        errors.push({ row: rowNo, message: `发票类型「${invoiceType}」无效（专票/普票/普票个人）` }); continue
+      }
+
+      prepared.push({
+        row: rowNo,
+        invoice_no: invoiceNo,
+        space_id: spaceId,
+        house_key: String(r.house_key || '').trim() || sp.house_key || '',
+        owner_name: String(r.owner_name || '').trim() || sp.owner_name || '',
+        phone: String(r.phone || '').trim() || sp.phone || '',
+        amount,
+        invoice_type: invoiceType,
+        invoice_code: String(r.invoice_code || '').trim(),
+        invoice_number: String(r.invoice_number || '').trim(),
+        invoice_date: invoiceDate,
+        remarks: String(r.remarks || '').trim(),
+      })
+    }
+
+    if (errors.length > 0 || prepared.length === 0) {
+      return { ok: false, total: list.length, success: 0, errors }
+    }
+
+    // 全部合法：统一写入
+    const houseKeys = new Set<string>()
+    for (const p of prepared) {
+      await client.query(
+        `INSERT INTO invoice_records
+         (invoice_no, space_no, house_key, owner_name, phone, amount, invoice_type,
+          invoice_code, invoice_number, invoice_date, status, remarks, operator, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::date,'已开票',$11,$12,NOW(),NOW())`,
+        [p.invoice_no, p.space_id, p.house_key, p.owner_name, p.phone, p.amount,
+         p.invoice_type, p.invoice_code, p.invoice_number, p.invoice_date,
+         p.remarks, '批量导入']
+      )
+      await client.query(
+        `UPDATE parking_spaces SET invoice_status = '已开票', updated_at = NOW() WHERE space_id = $1`,
+        [p.space_id]
+      )
+      if (p.house_key) houseKeys.add(p.house_key)
+    }
+    for (const hk of houseKeys) {
+      await recalcOwnerInvoiceCounts(client, hk)
+    }
+    return { ok: true, total: list.length, success: prepared.length, errors: [] }
   })
 }
 

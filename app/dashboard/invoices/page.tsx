@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getInvoiceRecords, getInvoiceSummary } from '@/lib/queries'
 import InvoiceForm from './invoice-form'
+import InvoiceImport from './invoice-import'
 import InvoiceRecordTable from './invoice-record-table'
 
 export const dynamic = 'force-dynamic'
@@ -59,6 +60,7 @@ export default async function InvoicesPage() {
 
       <section className="card mb-4" style={{ padding: 16 }}>
         <InvoiceForm operator={operator} />
+        <InvoiceImport />
       </section>
 
       <section className="card" style={{ padding: 16 }}>

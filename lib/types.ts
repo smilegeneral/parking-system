@@ -193,6 +193,33 @@ export interface InvoiceRecord {
   updated_at: string
 }
 
+// 批量导入：一行 Excel 对应的字段（表头见前端模板）
+export interface InvoiceImportRow {
+  invoice_no?: string        // 登记单号，留空则自动生成 FPxxx
+  space_no: string           // 车位号（必填）
+  house_key?: string         // 房号（可留空，取车位上的房号）
+  owner_name?: string        // 业主（可留空，取车位上的业主）
+  phone?: string
+  amount?: number | string   // 开票金额（可留空，取车位价格）
+  invoice_type?: string      // 专票/普票/普票个人，默认普票
+  invoice_code?: string
+  invoice_number?: string
+  invoice_date?: string      // YYYY-MM-DD，留空取今天
+  remarks?: string
+}
+
+export interface InvoiceImportError {
+  row: number                // Excel 行号（含表头，从 2 起）
+  message: string
+}
+
+export interface InvoiceImportResult {
+  ok: boolean
+  total: number
+  success: number
+  errors: InvoiceImportError[]
+}
+
 // 发票统计汇总（页面顶部）
 export interface InvoiceSummary {
   invoiced_spaces: number     // 已开票车位数
