@@ -399,12 +399,16 @@ function parseAmount(raw: number | string): number {
 }
 
 export async function importInvoices(rows: InvoiceImportRow[]): Promise<InvoiceImportResult> {
-  if (!await requireRole(ROLE_SALE)) return unauthorized('发票批量导入')
-  const list = Array.isArray(rows) ? rows : []
-  if (list.length === 0) return { ok: false, total: 0, success: 0, errors: [{ row: 0, message: '无数据行' }] }
-  if (list.length > 500) return { ok: false, total: list.length, success: 0, errors: [{ row: 0, message: '单次最多导入 500 行' }] }
+  const total = Array.isArray(rows) ? rows.length : 0
+  try {
+    if (!await requireRole(ROLE_SALE)) {
+      return { ok: false, total, success: 0, errors: [{ row: 0, message: '无权执行操作：发票批量导入（权限不足）' }] }
+    }
+    const list = Array.isArray(rows) ? rows : []
+    if (list.length === 0) return { ok: false, total: 0, success: 0, errors: [{ row: 0, message: '无数据行' }] }
+    if (list.length > 500) return { ok: false, total: list.length, success: 0, errors: [{ row: 0, message: '单次最多导入 500 行' }] }
 
-  return withTransaction(async (client) => {
+    return await withTransaction(async (client) => {
     const errors: InvoiceImportError[] = []
     const prepared: {
       row: number; invoice_no: string; spaces: string[]; house_key: string;
@@ -503,8 +507,12 @@ export async function importInvoices(rows: InvoiceImportRow[]): Promise<InvoiceI
     for (const hk of houseKeys) {
       await recalcOwnerInvoiceCounts(client, hk)
     }
-    return { ok: true, total: list.length, success: prepared.length, errors: [] }
-  })
+      return { ok: true, total: list.length, success: prepared.length, errors: [] }
+    })
+  } catch (err: any) {
+    console.error('[importInvoices] import failed:', err)
+    return { ok: false, total, success: 0, errors: [{ row: 0, message: `导入失败：${err?.message || '服务器内部错误'}` }] }
+  }
 }
 
 // ==================== 车位调换 ====================

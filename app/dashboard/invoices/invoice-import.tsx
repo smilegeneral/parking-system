@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import { importInvoices } from '@/lib/actions'
@@ -20,11 +20,20 @@ function cellText(v: any): string {
 
 export default function InvoiceImport() {
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<InvoiceImportRow[]>([])
   const [fileName, setFileName] = useState('')
   const [error, setError] = useState('')
   const [result, setResult] = useState<InvoiceImportResult | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  function clearAll() {
+    setRows([])
+    setFileName('')
+    setError('')
+    setResult(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
 
   function downloadTemplate() {
     const wb = XLSX.utils.book_new()
@@ -51,6 +60,7 @@ export default function InvoiceImport() {
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = '' // 重置 input，确保修正后可再次选择同一文件触发 onChange
     setError('')
     setResult(null)
     setRows([])
@@ -100,10 +110,14 @@ export default function InvoiceImport() {
     setError('')
     try {
       const res = await importInvoices(rows)
+      if (!res || typeof res.ok !== 'boolean' || !Array.isArray(res.errors)) {
+        throw new Error('导入服务未返回有效结果，请稍后重试')
+      }
       setResult(res)
       if (res.ok) {
         setRows([])
         setFileName('')
+        if (fileInputRef.current) fileInputRef.current.value = ''
         router.refresh()
       }
     } catch (e: any) {
@@ -130,13 +144,16 @@ export default function InvoiceImport() {
         <label style={{ fontSize: 14, color: '#555' }}>
           选择 Excel 文件（.xlsx / .xls）
           <div style={{ marginTop: 4 }}>
-            <input type="file" accept=".xlsx,.xls" onChange={handleFile} className="text-sm" />
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="text-sm" />
           </div>
         </label>
         {rows.length > 0 && (
           <button type="button" className="btn-success" onClick={handleImport} disabled={submitting}>
             {submitting ? '导入中...' : `✅ 确认导入（${rows.length} 张发票）`}
           </button>
+        )}
+        {(rows.length > 0 || !!error || !!result) && (
+          <button type="button" onClick={clearAll} disabled={submitting} style={{ fontSize: 13, padding: '6px 10px' }}>🧹 清除重选</button>
         )}
       </div>
 
