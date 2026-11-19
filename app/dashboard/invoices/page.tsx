@@ -25,7 +25,7 @@ export default async function InvoicesPage() {
 
   const [summary, records] = await Promise.all([
     getInvoiceSummary(),
-    getInvoiceRecords(200),
+    getInvoiceRecords(0), // 不限制，展示全部登记记录，与统计笔数保持一致
   ])
 
   return (

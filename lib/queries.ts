@@ -488,10 +488,11 @@ export async function getNextSaleOrderNo(): Promise<string> {
 
 // ---------- 发票开取登记 ----------
 export async function getInvoiceRecords(limit = 200): Promise<InvoiceRecord[]> {
-  const { rows } = await pool.query(
-    `SELECT * FROM invoice_records ORDER BY created_at DESC LIMIT $1`,
-    [limit]
-  )
+  // limit <= 0 表示不限制，取全部记录（保证列表条数与统计口径一致）
+  const sql = limit > 0
+    ? `SELECT * FROM invoice_records ORDER BY created_at DESC LIMIT $1`
+    : `SELECT * FROM invoice_records ORDER BY created_at DESC`
+  const { rows } = await pool.query(sql, limit > 0 ? [limit] : [])
   return rows as InvoiceRecord[]
 }
 
