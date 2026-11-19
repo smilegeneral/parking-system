@@ -111,7 +111,7 @@ export default function InvoiceImport() {
     try {
       const res = await importInvoices(rows)
       if (!res || typeof res.ok !== 'boolean' || !Array.isArray(res.errors)) {
-        throw new Error('导入服务未返回有效结果，请稍后重试')
+        throw new Error('导入服务未返回有效结果（可能执行超时或服务异常），请减少行数重试或查看服务端日志')
       }
       setResult(res)
       if (res.ok) {
