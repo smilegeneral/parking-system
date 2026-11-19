@@ -398,6 +398,37 @@ function parseAmount(raw: number | string): number {
   return Number(String(raw ?? '').replace(/[,，\s¥￥]/g, ''))
 }
 
+// 兼容历史库：早期 invoice_records 的部分列建为 VARCHAR(20)，
+// 多车位逗号拼接（space_no）或超长发票号会触发 "value too long for type character varying(20)"。
+// 导入前按 information_schema 实测列宽，仅对不足的列幂等扩宽，避免依赖手工执行迁移脚本。
+async function ensureInvoiceColumnsWideEnough(client: any): Promise<void> {
+  const targets: Record<string, number> = {
+    invoice_no: 100,
+    space_no: 1000,
+    house_key: 100,
+    owner_name: 200,
+    phone: 50,
+    invoice_type: 50,
+    invoice_code: 100,
+    invoice_number: 100,
+    status: 50,
+    operator: 100,
+  }
+  const info = await client.query(
+    `SELECT column_name, character_maximum_length
+       FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'invoice_records'`
+  )
+  for (const [col, want] of Object.entries(targets)) {
+    const found = info.rows.find((r: any) => r.column_name === col)
+    const cur = found?.character_maximum_length
+    // character_maximum_length 为 null 表示 text/无长度限制，无需处理
+    if (found && typeof cur === 'number' && cur < want) {
+      await client.query(`ALTER TABLE invoice_records ALTER COLUMN ${col} TYPE VARCHAR(${want})`)
+    }
+  }
+}
+
 export async function importInvoices(rows: InvoiceImportRow[]): Promise<InvoiceImportResult> {
   const total = Array.isArray(rows) ? rows.length : 0
   try {
@@ -409,6 +440,9 @@ export async function importInvoices(rows: InvoiceImportRow[]): Promise<InvoiceI
     if (list.length > 500) return { ok: false, total: list.length, success: 0, errors: [{ row: 0, message: '单次最多导入 500 行' }] }
 
     return await withTransaction(async (client) => {
+      // 兼容历史库：导入前确保列宽足够，避免多车位拼接触发 varchar(20) 超长
+      await ensureInvoiceColumnsWideEnough(client)
+
       const errors: InvoiceImportError[] = []
       const usedNos = new Set<string>()
       const usedSpaces = new Set<string>()
