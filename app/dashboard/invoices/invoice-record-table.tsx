@@ -15,7 +15,7 @@ const PAGE_SIZES = [20, 50, 100, 200]
 
 // 导出的列：中文表头 + 取值函数
 const EXPORT_COLUMNS: { header: string; get: (r: InvoiceRecord) => any }[] = [
-  { header: '登记单号', get: r => r.invoice_no },
+  { header: '发票号码', get: r => r.invoice_number || r.invoice_no },
   { header: '车位号', get: r => r.space_no },
   { header: '房号(housekey)', get: r => r.house_key },
   { header: '业主', get: r => r.owner_name },
@@ -23,7 +23,6 @@ const EXPORT_COLUMNS: { header: string; get: (r: InvoiceRecord) => any }[] = [
   { header: '价税合计额(元)', get: r => Number(r.amount || 0) },
   { header: '发票类型', get: r => r.invoice_type },
   { header: '发票代码', get: r => r.invoice_code },
-  { header: '发票号码', get: r => r.invoice_number },
   { header: '开票日期', get: r => shortDate(r.invoice_date) },
   { header: '状态', get: r => r.status },
   { header: '备注', get: r => r.remarks },
@@ -91,13 +90,13 @@ export default function InvoiceRecordTable({
   }
 
   async function handleCancel(r: InvoiceRecord) {
-    if (!window.confirm(`确认作废登记单 ${r.invoice_no}？\n车位将恢复为「未开票」，业主开票统计同步更新。`)) return
+    if (!window.confirm(`确认作废发票 ${r.invoice_number || r.invoice_no}？\n车位将恢复为「未开票」，业主开票统计同步更新。`)) return
     setBusy(r.invoice_id)
     setMsg('')
     try {
       const res = await cancelInvoice(r.invoice_id)
       if (res?.ok) {
-        setMsg(`已作废 ${r.invoice_no}`)
+        setMsg(`已作废 ${r.invoice_number || r.invoice_no}`)
         router.refresh()
       } else {
         setMsg('作废失败')
@@ -145,8 +144,8 @@ export default function InvoiceRecordTable({
             <table>
               <thead>
                 <tr>
-                  <th>登记单号</th><th>车位号</th><th>房号</th><th>业主</th>
-                  <th>金额(元)</th><th>发票类型</th><th>发票号码</th><th>开票日期</th>
+                  <th>发票号码</th><th>车位号</th><th>房号</th><th>业主</th>
+                  <th>金额(元)</th><th>发票类型</th><th>开票日期</th>
                   <th>状态</th><th>操作人</th><th>登记时间</th>
                   {canCancel && <th>操作</th>}
                 </tr>
@@ -154,13 +153,12 @@ export default function InvoiceRecordTable({
               <tbody>
                 {pageRows.map(r => (
                   <tr key={r.invoice_id}>
-                    <td style={{ fontWeight: 600 }}>{r.invoice_no}</td>
+                    <td style={{ fontWeight: 600 }}>{r.invoice_number || r.invoice_no || '-'}</td>
                     <td>{r.space_no || '-'}</td>
                     <td>{r.house_key || '-'}</td>
                     <td>{r.owner_name || '-'}</td>
                     <td>¥{Number(r.amount || 0).toLocaleString()}</td>
                     <td>{r.invoice_type || '-'}</td>
-                    <td>{r.invoice_number || '-'}</td>
                     <td>{shortDate(r.invoice_date)}</td>
                     <td>
                       <span className={`badge ${r.status === '已开票' ? 'badge-green' : 'badge-red'}`}>
