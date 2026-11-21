@@ -30,6 +30,7 @@ export default async function DashboardPage() {
     : [
         { href: '/dashboard/spaces', label: '🗺️ 销控图', desc: '查看全部车位状态，预订/销售', perm: 'spaces' },
         { href: '/dashboard/spaces/manage', label: '➕ 车位管理', desc: '新增车位 / 取消车位（未售→取消）', perm: 'spaces' },
+        { href: '/dashboard/spaces/edit', label: '✏️ 车位修改', desc: '修改未售车位价格、类型（单个/按类型批量）', perm: 'spaces' },
         { href: '/dashboard/spaces/logs', label: '📋 台账变更日志', desc: '查询车位新增/取消时间与原因', perm: 'spaces' },
         { href: '/dashboard/query', label: '🔍 车位查询', desc: '多条件模糊查询车位', perm: 'spaces' },
         { href: '/dashboard/sale', label: '💰 车位销售', desc: '预订/直接销售车位给业主', perm: 'sale' },

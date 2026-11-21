@@ -1,31 +1,39 @@
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
-import { getGarageMaps, getUnsoldSpacesByZone } from '@/lib/queries'
+import { getUnsoldSpacesByZone, getMappedSpacesByZone } from '@/lib/queries'
 import { GARAGE_ZONES } from '@/lib/types'
 import SignOutButton from '../sign-out-button'
-import DistributionUploader from './distribution-uploader'
+import LiveMap from './live-map'
 
 // ============================================================
-//  车位分布图 - 管理员上传六区图片，下方显示未售车位列表
-//  访客(guest) 登录后仅能访问此页面
+//  车位分布图 - 动态图（底图随代码发布，不再依赖后台上传）
+//  - guest(role=0) 只显示未售车位，且不可切换
+//  - 其他角色默认显示全部，可勾选"仅未售"
 // ============================================================
+
+// 各区底图：随代码发布，位于 public/garage-maps/
+const ZONE_BASEMAP: Record<string, string> = {
+  'A区': '/garage-maps/A.jpg',
+  'B区': '/garage-maps/B.jpg',
+  'D1区': '/garage-maps/D1.jpg',
+  'D2区': '/garage-maps/D2.jpg',
+  'E区': '/garage-maps/E.jpg',
+}
+
 export default async function DistributionPage() {
   const session = await auth()
   if (!session) throw new Error('未登录')
 
   const user = session.user as any
   const role = user?.role ?? 1
-  const isAdmin = role >= 2   // 仅管理员可上传图片
+  const isGuest = role === 0
   const displayName = user?.display_name || user?.name
-
-  // 并行查询六区图片 + 六区未售车位
-  const maps = await getGarageMaps()
-  const mapByZone = new Map(maps.map(m => [m.zone, m]))
 
   const zonesData = await Promise.all(
     GARAGE_ZONES.map(async z => ({
       zone: z,
-      spaces: await getUnsoldSpacesByZone(z),
+      unsold: await getUnsoldSpacesByZone(z),
+      mapped: await getMappedSpacesByZone(z),
     }))
   )
 
@@ -36,6 +44,7 @@ export default async function DistributionPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700 }}>🅿️ 车位分布图</h1>
           <p className="text-sm text-gray">
             欢迎，{displayName} · 角色：{role === 3 ? '超级管理员' : role === 2 ? '管理员' : role === 1 ? '销售员' : '访客'}
+            {isGuest && ' · 仅显示未售车位'}
           </p>
         </div>
         <div className="flex" style={{ gap: 8 }}>
@@ -45,75 +54,18 @@ export default async function DistributionPage() {
       </header>
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
-        {zonesData.map(({ zone, spaces }) => {
-          const map = mapByZone.get(zone)
+        {zonesData.map(({ zone, unsold, mapped }) => {
+          const imageUrl = ZONE_BASEMAP[zone] || null
           return (
             <section key={zone} className="card" style={{ padding: 16 }}>
               <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>
-                {zone} <span className="text-sm text-gray">（未售 {spaces.length} 个）</span>
+                {zone} <span className="text-sm text-gray">（未售 {unsold.length} 个）</span>
               </h2>
 
-              {/* 车库图片 */}
-              <div
-                style={{
-                  width: '100%',
-                  aspectRatio: '16 / 10',
-                  background: '#f5f5f5',
-                  border: '1px dashed #d9d9d9',
-                  borderRadius: 8,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                  marginBottom: 12,
-                }}
-              >
-                {map?.image_url ? (
-                  <a
-                    href={map.image_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="点击在新窗口查看大图"
-                    style={{ display: 'block', position: 'relative', width: '100%', height: '100%', cursor: 'pointer' }}
-                  >
-                    <img
-                      src={map.image_url}
-                      alt={`${zone}车位分布`}
-                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    />
-                    <span
-                      style={{
-                        position: 'absolute',
-                        right: 8,
-                        bottom: 8,
-                        padding: '4px 10px',
-                        fontSize: 12,
-                        color: '#fff',
-                        background: 'rgba(0,0,0,0.55)',
-                        borderRadius: 6,
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      点击查看大图 ↗
-                    </span>
-                  </a>
-                ) : (
-                  <span className="text-sm text-gray">暂无分布图（管理员可上传）</span>
-                )}
-              </div>
-
-              {/* 管理员可上传 */}
-              {isAdmin && (
-                <DistributionUploader
-                  zone={zone}
-                  currentName={map?.image_name}
-                />
-              )}
-
               {/* 未售车位列表 */}
-              <div style={{ marginTop: 14 }}>
+              <div style={{ marginTop: 4, marginBottom: 14 }}>
                 <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>未售车位</h3>
-                {spaces.length === 0 ? (
+                {unsold.length === 0 ? (
                   <p className="text-sm text-gray">该区暂无未售车位</p>
                 ) : (
                   <div style={{ maxHeight: 220, overflowY: 'auto' }}>
@@ -121,16 +73,14 @@ export default async function DistributionPage() {
                       <thead>
                         <tr>
                           <th style={{ fontSize: 14 }}>车位号</th>
-                          <th style={{ fontSize: 14 }}>区域</th>
-                          <th style={{ fontSize: 14 }}>类型</th>
+                          <th style={{ fontSize: 14 }}>车位类型</th>
                           <th style={{ fontSize: 14 }}>价格(元)</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {spaces.map(s => (
+                        {unsold.map(s => (
                           <tr key={s.space_id}>
                             <td style={{ fontSize: 14 }}>{s.space_id}</td>
-                            <td style={{ fontSize: 14 }}>{s.garage_zone}</td>
                             <td style={{ fontSize: 14 }}>{s.space_type || '-'}</td>
                             <td style={{ fontSize: 14 }}>{s.price ?? '-'}</td>
                           </tr>
@@ -140,6 +90,22 @@ export default async function DistributionPage() {
                   </div>
                 )}
               </div>
+
+              {mapped.length > 0 && imageUrl ? (
+                <LiveMap
+                  zone={zone}
+                  imageUrl={imageUrl}
+                  initialSpaces={(isGuest ? unsold : mapped) as any}
+                  forceUnsoldOnly={isGuest}
+                />
+              ) : (
+                <div style={{
+                  padding: 24, textAlign: 'center', color: '#999',
+                  background: '#f5f5f5', border: '1px dashed #d9d9d9', borderRadius: 8,
+                }}>
+                  该区暂无分布数据
+                </div>
+              )}
             </section>
           )
         })}

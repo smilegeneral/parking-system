@@ -621,6 +621,31 @@ export async function getUnsoldSpacesByZone(zone: string): Promise<ParkingSpace[
   return rows as ParkingSpace[]
 }
 
+// 动态分布图：取某区所有已标注坐标的车位（含状态/类型/业主），实时反映销售与调换
+export async function getMappedSpacesByZone(zone: string): Promise<ParkingSpace[]> {
+  const { rows } = await pool.query(
+    `SELECT space_id, garage_zone, space_num, status, space_type, house_key,
+            owner_name, price, invoice_status, pos_x, pos_y
+       FROM parking_spaces
+      WHERE garage_zone = $1 AND pos_x IS NOT NULL AND pos_y IS NOT NULL
+      ORDER BY space_num`,
+    [zone]
+  )
+  return rows as ParkingSpace[]
+}
+
+// 动态分布图：某区各状态数量（用于图例计数）
+export async function getZoneStatusCounts(zone: string): Promise<Record<string, number>> {
+  const { rows } = await pool.query(
+    `SELECT status, COUNT(*)::int AS n FROM parking_spaces
+      WHERE garage_zone = $1 GROUP BY status`,
+    [zone]
+  )
+  const out: Record<string, number> = {}
+  for (const r of rows) out[r.status] = r.n
+  return out
+}
+
 // ---------- 车位分布图：获取某区图片（含全部六区，无图返回 null） ----------
 export async function getGarageMaps(): Promise<GarageMap[]> {
   const { rows } = await pool.query(`SELECT * FROM garage_maps ORDER BY zone`)

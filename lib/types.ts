@@ -51,6 +51,8 @@ export interface ParkingSpace {
   is_group_buy: boolean    // 是否团购
   group_company: string    // 团购公司名
   invoice_status: string   // 开票状态：未开票 / 已开票
+  pos_x?: number | null    // 分布图横坐标(百分比)，动态分布图用
+  pos_y?: number | null    // 分布图纵坐标(百分比)，动态分布图用
   created_at: string
   updated_at: string
 }

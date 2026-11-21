@@ -1536,6 +1536,110 @@ export async function fetchUnsoldSpaces(): Promise<ParkingSpace[]> {
   return await getUnsoldSpaces()
 }
 
+// ==================== 未售车位改价 / 改类型 ====================
+export interface UpdateSpaceInput {
+  space_id: string
+  price?: number | null      // 新价格，null/undefined 表示不改
+  space_type?: string | null // 新类型，null/undefined/空 表示不改
+  operator?: string
+}
+
+// 单独修改一个未售车位的价格或类型
+export async function updateUnsoldSpace(input: UpdateSpaceInput) {
+  if (!await requireRole(ROLE_SALE)) return unauthorized('修改车位')
+  const sid = (input.space_id || '').trim()
+  if (!sid) throw new Error('请选择车位')
+  const hasPrice = input.price != null && Number.isFinite(Number(input.price)) && Number(input.price) >= 0
+  const newType = (input.space_type || '').trim()
+  if (!hasPrice && !newType) throw new Error('请填写新价格或新类型')
+
+  return withTransaction(async (client) => {
+    const oldRes = await client.query(
+      `SELECT status, price, space_type FROM parking_spaces WHERE space_id = $1`, [sid]
+    )
+    if (!oldRes.rowCount) throw new Error(`车位 ${sid} 不存在`)
+    const old = oldRes.rows[0]
+    if (old.status !== '未售') throw new Error(`车位 ${sid} 当前为「${old.status}」，仅未售车位可修改`)
+
+    const parts: string[] = []
+    const params: any[] = []
+    let idx = 1
+    if (hasPrice) { parts.push(`price = $${idx++}`); params.push(Number(input.price)) }
+    if (newType) { parts.push(`space_type = $${idx++}`); params.push(newType) }
+    parts.push(`updated_at = NOW()`)
+    params.push(sid)
+    const res = await client.query(
+      `UPDATE parking_spaces SET ${parts.join(', ')} WHERE space_id = $${idx} AND status = '未售' RETURNING *`,
+      params
+    )
+
+    const changes: string[] = []
+    if (hasPrice) changes.push(`价格 ${old.price ?? '-'} → ${input.price}`)
+    if (newType) changes.push(`类型 ${old.space_type || '-'} → ${newType}`)
+    await insertLifecycleLog(client, {
+      space_id: sid,
+      op_type: '信息修改',
+      old_status: old.status,
+      new_status: old.status,
+      reason: changes.join('；'),
+      operator: input.operator || null,
+    })
+    return { ok: true, space: res.rows[0] }
+  })
+}
+
+// 按车位类型批量修改未售车位：可改价、可改类型
+export async function batchUpdateUnsoldSpaces(input: {
+  sourceType: string
+  newPrice?: number | null
+  newType?: string | null
+  operator?: string
+}) {
+  if (!await requireRole(ROLE_SALE)) return unauthorized('批量修改车位')
+  const src = (input.sourceType || '').trim()
+  if (!src) throw new Error('请选择来源车位类型')
+  const hasPrice = input.newPrice != null && Number.isFinite(Number(input.newPrice)) && Number(input.newPrice) >= 0
+  const newType = (input.newType || '').trim()
+  if (!hasPrice && !newType) throw new Error('请填写新价格或新类型')
+
+  return withTransaction(async (client) => {
+    // 取待改的未售车位（用于逐条日志）
+    const targets = await client.query(
+      `SELECT space_id, price, space_type FROM parking_spaces
+       WHERE status = '未售' AND space_type = $1`, [src]
+    )
+    if (!targets.rowCount) return { ok: true, updated: 0, message: `没有类型为「${src}」的未售车位` }
+
+    const parts: string[] = []
+    const params: any[] = []
+    let idx = 1
+    if (hasPrice) { parts.push(`price = $${idx++}`); params.push(Number(input.newPrice)) }
+    if (newType) { parts.push(`space_type = $${idx++}`); params.push(newType) }
+    parts.push(`updated_at = NOW()`)
+    params.push(src)
+    const res = await client.query(
+      `UPDATE parking_spaces SET ${parts.join(', ')}
+       WHERE status = '未售' AND space_type = $${idx}`,
+      params
+    )
+
+    for (const row of targets.rows) {
+      const changes: string[] = []
+      if (hasPrice) changes.push(`价格 ${row.price ?? '-'} → ${input.newPrice}`)
+      if (newType) changes.push(`类型 ${row.space_type || '-'} → ${newType}`)
+      await insertLifecycleLog(client, {
+        space_id: row.space_id,
+        op_type: '批量信息修改',
+        old_status: '未售',
+        new_status: '未售',
+        reason: changes.join('；'),
+        operator: input.operator || null,
+      })
+    }
+    return { ok: true, updated: res.rowCount || 0 }
+  })
+}
+
 // ==================== AI 配置管理（统计报表「AI 智能问数」） ====================
 // 约定：API Key 一律经 AES-256-GCM 加密后落库，明文既不落库也不返回前端。
 

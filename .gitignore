@@ -47,3 +47,39 @@ _v.js
 
 # git commit message 临时文件
 .git-commit-msg.tmp
+
+# 车位分布图坐标提取过程产物（诊断脚本/中间数据/图纸源文件）
+/dxf/
+garage.dxf
+garage.dwl
+garage.dwl2
+/anchors-*.json
+/coords-*.json
+/space-coords.json
+/db-*.json
+/red-*.json
+/blue-*.json
+/aff-*.json
+/probe-*.txt
+/*-grid.png
+/overlay-*.png
+/coord-preview.html
+/parking-coords.csv
+/scripts/affine-*.json
+/scripts/*grid*.ps1
+/scripts/overlay-zone.ps1
+/scripts/probe-*.js
+/scripts/extract-anchors.js
+/scripts/check-map.js
+/scripts/gen-preview.js
+/scripts/set-amap.js
+/scripts/verify-zones.js
+/scripts/test-coords-sql.js
+/scripts/diagnose-coords.js
+/scripts/dxf-header.js
+/scripts/extract-parking-coords.js
+/scripts/find-anchors.js
+/scripts/inspect-dxf.js
+/scripts/inspect-dxf-deep.js
+/scripts/inspect-map-sizes.ps1
+/scripts/inspect-spaces.js

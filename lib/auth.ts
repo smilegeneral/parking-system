@@ -90,6 +90,21 @@ export const authOptions: NextAuthOptions = {
     // 无操作的空闲/关闭浏览器超过 1 小时后自动断开
     updateAge: 30 * 60,
   },
+  // 会话 Cookie 配置：统一使用「无前缀 + 非 Secure」的 Cookie 名。
+  // 目的：
+  //  1) 使 http://localhost:3000（本地排障）与 https://parks.cc.cd（Cloudflare 隧道）两种访问方式
+  //     都能正常保存会话 Cookie（浏览器在 http 页会拒绝 Secure Cookie，导致"点登录没反应/卡在验证码"）。
+  //  2) 与 middleware.ts 按同一显式名「next-auth.session-token」读取保持一致，
+  //     避免 NextAuth 的 withAuth 按 NEXTAUTH_URL=https 推断成 __Secure- 前缀名而导致登录后被踢回 /login。
+  // 说明：非 Secure Cookie 在 https 站点上浏览器同样会保存（仅 http 页也能存），因此两端通用。
+  cookies: {
+    sessionToken: { name: 'next-auth.session-token', options: { httpOnly: true, sameSite: 'lax', path: '/', secure: false } },
+    callbackUrl: { name: 'next-auth.callback-url', options: { sameSite: 'lax', path: '/', secure: false } },
+    csrfToken: { name: 'next-auth.csrf-token', options: { httpOnly: true, sameSite: 'lax', path: '/', secure: false } },
+    pkceCodeVerifier: { name: 'next-auth.pkce.code_verifier', options: { httpOnly: true, sameSite: 'lax', path: '/', secure: false } },
+    state: { name: 'next-auth.state', options: { httpOnly: true, sameSite: 'lax', path: '/', secure: false } },
+    nonce: { name: 'next-auth.nonce', options: { httpOnly: true, sameSite: 'lax', path: '/', secure: false } },
+  },
   pages: {
     signIn: '/login',
   },

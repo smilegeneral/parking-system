@@ -16,6 +16,7 @@ export default async function DashboardLayout({
     { href: '/dashboard', label: '概览', icon: '🏠', perm: 'public', group: '工作台' },
     { href: '/dashboard/spaces', label: '销控图', icon: '🗺️', perm: 'spaces', group: '车位' },
     { href: '/dashboard/spaces/manage', label: '车位管理', icon: '➕', perm: 'spaces', group: '车位' },
+    { href: '/dashboard/spaces/edit', label: '车位修改', icon: '✏️', perm: 'spaces', group: '车位' },
     { href: '/dashboard/spaces/logs', label: '台账变更日志', icon: '📋', perm: 'spaces', group: '报表' },
     { href: '/dashboard/query', label: '车位查询', icon: '🔍', perm: 'spaces', group: '车位' },
     { href: '/dashboard/sale', label: '车位销售', icon: '💰', perm: 'sale', group: '业务' },
