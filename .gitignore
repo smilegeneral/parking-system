@@ -85,3 +85,6 @@ garage.dwl2
 /scripts/inspect-spaces.js
 /scripts/aiven-check.js
 /scripts/aiven-import-coords.js
+
+# SQL 脚本不入库（数据库结构/数据脚本，仅本地保留）
+*.sql
