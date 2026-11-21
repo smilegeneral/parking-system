@@ -83,3 +83,5 @@ garage.dwl2
 /scripts/inspect-dxf-deep.js
 /scripts/inspect-map-sizes.ps1
 /scripts/inspect-spaces.js
+/scripts/aiven-check.js
+/scripts/aiven-import-coords.js
