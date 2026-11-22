@@ -22,6 +22,14 @@ const BASE_ZOOM = 1.5
 const BOX_VW = 20 / BASE_ZOOM // 框视觉宽 20px 对应的 CSS 尺寸
 const BOX_VH = 12 / BASE_ZOOM // 框视觉高 12px
 
+// 车位框标签：含字母的车位号原样保留（X310B→X310B）；
+// 纯数字不足 3 位前补 0（78→078、215→215、1234→1234）
+function formatSpaceNum(spaceNum: string): string {
+  if (/[A-Za-z]/.test(spaceNum)) return spaceNum
+  const digits = spaceNum.replace(/^0+/, '')
+  return (digits || '0').padStart(3, '0')
+}
+
 function MapCanvas({
   zone, imageUrl, spaces, showLabels, showPrice, zoom, width, onSelect, selected, onClose,
   editMode, onMove, onMoveEnd, selectedIds, baseId, onPick,
@@ -96,7 +104,7 @@ function MapCanvas({
         {spaces.map(s => {
           const label = showPrice
             ? (s.price != null ? (Number(s.price) / 10000).toFixed(1) + '万' : '-')
-            : (showLabels ? s.space_num.replace(/^0+/, '') : '')
+            : (showLabels ? formatSpaceNum(s.space_num) : '')
           // 车位号字自适应框体：位数越多字号越小，保证 20×12 视觉框内不溢出
           const len = label.length
           const visualFont = len <= 2 ? 10 : len === 3 ? 8 : 7
