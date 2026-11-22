@@ -634,6 +634,15 @@ export async function getMappedSpacesByZone(zone: string): Promise<ParkingSpace[
   return rows as ParkingSpace[]
 }
 
+// 动态分布图：手动拖拽调整车位坐标（管理员操作）
+export async function updateSpacePosition(spaceId: string, posX: number, posY: number): Promise<boolean> {
+  const r = await pool.query(
+    `UPDATE parking_spaces SET pos_x=$1, pos_y=$2, updated_at=NOW() WHERE space_id=$3`,
+    [posX, posY, spaceId]
+  )
+  return (r.rowCount || 0) > 0
+}
+
 // 动态分布图：某区各状态数量（用于图例计数）
 export async function getZoneStatusCounts(zone: string): Promise<Record<string, number>> {
   const { rows } = await pool.query(

@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ParkingSpace } from '@/lib/types'
-import { getMappedSpacesClient } from './actions'
+import { getMappedSpacesClient, saveSpacePosition } from './actions'
 
 // 状态 -> 颜色 / 图例顺序
 const STATUS_STYLE: Record<string, { bg: string; label: string }> = {
@@ -18,6 +18,7 @@ const LEGEND_ORDER = ['未售', '预订', '已售', '团购锁定', '已核销',
 
 function MapCanvas({
   zone, imageUrl, spaces, showLabels, showPrice, zoom, width, onSelect, selected, onClose,
+  editMode, onMove, onMoveEnd,
 }: {
   zone: string
   imageUrl: string | null
@@ -29,7 +30,36 @@ function MapCanvas({
   onSelect: (s: ParkingSpace) => void
   selected: ParkingSpace | null
   onClose: () => void
+  editMode: boolean
+  onMove: (spaceId: string, x: number, y: number) => void
+  onMoveEnd: (spaceId: string) => void
 }) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const dragId = useRef<string | null>(null)
+  const movedRef = useRef(false)
+
+  function posFromEvent(clientX: number, clientY: number) {
+    const el = boxRef.current
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const x = Math.min(100, Math.max(0, +(((clientX - r.left) / r.width) * 100).toFixed(2)))
+    const y = Math.min(100, Math.max(0, +(((clientY - r.top) / r.height) * 100).toFixed(2)))
+    return { x, y }
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (!dragId.current) return
+    const p = posFromEvent(e.clientX, e.clientY)
+    if (p) { movedRef.current = true; onMove(dragId.current, p.x, p.y) }
+  }
+  function endDrag(e: React.PointerEvent) {
+    if (!dragId.current) return
+    const id = dragId.current
+    dragId.current = null
+    try { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId) } catch { /* noop */ }
+    if (movedRef.current) onMoveEnd(id)
+    movedRef.current = false
+  }
+
   // 悬浮卡定位：跟随被点车位，靠边时收敛百分比，避免溢出容器
   const sx = selected ? Number(selected.pos_x) : 0
   const sy = selected ? Number(selected.pos_y) : 0
@@ -37,12 +67,18 @@ function MapCanvas({
   const cardTop = sy > 70 ? Math.max(1, sy - 30) : sy + 1.5
   return (
     <div style={{ zoom }}>
-      <div style={{
-        position: 'relative', width,
-        background: '#f5f5f5', border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden',
-      }}>
+      <div
+        ref={boxRef}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        style={{
+          position: 'relative', width,
+          background: '#f5f5f5', border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden',
+        }}
+      >
         {imageUrl ? (
-          <img src={imageUrl} alt={`${zone}车位分布底图`} style={{ display: 'block', width: '100%', height: 'auto' }} />
+          <img src={imageUrl} alt={`${zone}车位分布底图`} style={{ display: 'block', width: '100%', height: 'auto', userSelect: 'none', pointerEvents: 'none' }} draggable={false} />
         ) : (
           <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
             暂无底图（管理员上传后车位将叠加在图上）
@@ -52,8 +88,9 @@ function MapCanvas({
           <button
             key={s.space_id}
             type="button"
-            title={`${s.space_id} · ${s.status} · ${s.space_type || '-'}${s.price != null ? ' · ¥' + Number(s.price).toLocaleString() : ''}`}
-            onClick={(e) => { e.stopPropagation(); onSelect(s) }}
+            title={editMode ? `拖动调整：${s.space_id} (${Number(s.pos_x).toFixed(1)}%, ${Number(s.pos_y).toFixed(1)}%)` : `${s.space_id} · ${s.status} · ${s.space_type || '-'}${s.price != null ? ' · ¥' + Number(s.price).toLocaleString() : ''}`}
+            onPointerDown={editMode ? (e) => { e.stopPropagation(); dragId.current = s.space_id; movedRef.current = false; try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId) } catch { /* noop */ } } : undefined}
+            onClick={(e) => { e.stopPropagation(); if (!movedRef.current) onSelect(s) }}
             style={{
               position: 'absolute',
               left: `${Number(s.pos_x)}%`,
@@ -64,7 +101,8 @@ function MapCanvas({
               borderRadius: 4,
               background: STATUS_STYLE[s.status]?.bg || '#666',
               color: '#fff', fontSize: 8, lineHeight: '18px', textAlign: 'center',
-              cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,.3)', opacity: 0.92,
+              cursor: editMode ? 'move' : 'pointer', touchAction: 'none', userSelect: 'none',
+              boxShadow: '0 1px 2px rgba(0,0,0,.3)', opacity: 0.92,
               outline: selected?.space_id === s.space_id ? '2px solid #111' : 'none',
               zIndex: selected?.space_id === s.space_id ? 5 : 1,
             }}
@@ -114,11 +152,13 @@ export default function LiveMap({
   imageUrl,
   initialSpaces,
   forceUnsoldOnly = false,
+  canEdit = false,
 }: {
   zone: string
   imageUrl: string | null
   initialSpaces: ParkingSpace[]
   forceUnsoldOnly?: boolean
+  canEdit?: boolean
 }) {
   const [spaces, setSpaces] = useState<ParkingSpace[]>(initialSpaces)
   const [selected, setSelected] = useState<ParkingSpace | null>(null)
@@ -129,6 +169,9 @@ export default function LiveMap({
   const [fullscreen, setFullscreen] = useState(false)
   const [lastSync, setLastSync] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState('')
 
   // 手动刷新车位状态（出售/调换后点此同步，避免高频自动轮询）
   async function refreshSpaces() {
@@ -143,9 +186,37 @@ export default function LiveMap({
     finally { setRefreshing(false) }
   }
 
-  // ESC 关闭放大
+  // 拖拽中：仅更新本地位置，不写库
+  function handleMove(spaceId: string, x: number, y: number) {
+    setSpaces(prev => prev.map(s => s.space_id === spaceId ? { ...s, pos_x: x, pos_y: y } : s))
+  }
+
+  // 松手：保存该车位坐标到数据库
+  async function handleMoveEnd(spaceId: string) {
+    const s = spaces.find(v => v.space_id === spaceId)
+    if (!s) return
+    setSaving(true)
+    try {
+      const res = await saveSpacePosition(spaceId, Number(s.pos_x), Number(s.pos_y))
+      if (res.ok) {
+        setToast(`已保存 ${s.space_id} 坐标 (${Number(s.pos_x).toFixed(1)}%, ${Number(s.pos_y).toFixed(1)}%)`)
+        setLastSync(new Date())
+      } else {
+        setToast(`保存失败：${res.error || '未知错误'}`)
+        await refreshSpaces()
+      }
+    } catch {
+      setToast('保存失败：网络错误')
+      await refreshSpaces()
+    } finally {
+      setSaving(false)
+      setTimeout(() => setToast(''), 3500)
+    }
+  }
+
+  // ESC 关闭放大 / 退出编辑
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { setFullscreen(false); setSelected(null) } }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { setFullscreen(false); setSelected(null); setEditMode(false) } }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
@@ -172,7 +243,13 @@ export default function LiveMap({
       <span style={{ minWidth: 42, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
       <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(z => Math.min(3, +(z + 0.2).toFixed(1)))}>＋</button>
       <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(1)}>复位</button>
-      <button type="button" className="btn-primary" style={{ padding: '2px 10px' }} onClick={refreshSpaces} disabled={refreshing}>{refreshing ? '刷新中...' : '🔄 刷新车位'}</button>
+      <button type="button" className="btn-primary" style={{ padding: '2px 10px' }} onClick={refreshSpaces} disabled={refreshing || saving}>{refreshing ? '刷新中...' : '🔄 刷新车位'}</button>
+      {canEdit && (
+        <label style={{ display: 'flex', gap: 4, alignItems: 'center', color: editMode ? '#c2410c' : undefined, fontWeight: editMode ? 600 : undefined }}>
+          <input type="checkbox" checked={editMode} onChange={e => { setEditMode(e.target.checked); setSelected(null) }} /> 编辑坐标{editMode ? '（拖动车位）' : ''}
+        </label>
+      )}
+      {saving && <span className="text-gray">保存中...</span>}
       {withFull && <button type="button" className="btn-primary" style={{ padding: '2px 10px' }} onClick={() => setFullscreen(true)}>⛶ 放大查看</button>}
       <span className="text-gray">上次同步 {lastSync.toLocaleTimeString('zh-CN')}</span>
     </div>
@@ -199,8 +276,9 @@ export default function LiveMap({
       {legend}
       <div style={{ marginBottom: 8 }}>{zoomBar(true)}</div>
 
+      {toast && <div style={{ margin: '8px 0', padding: '8px 12px', borderRadius: 6, background: toast.startsWith('保存失败') ? '#fee2e2' : '#dcfce7', color: toast.startsWith('保存失败') ? '#991b1b' : '#166534', fontSize: 13 }}>{toast}</div>}
       <div style={{ overflow: 'auto', maxWidth: '100%', border: '1px solid #e5e5e5', borderRadius: 8 }} onClick={() => setSelected(null)}>
-        <MapCanvas zone={zone} imageUrl={imageUrl} spaces={visibleSpaces} showLabels={showLabels} showPrice={showPrice} zoom={zoom} width="100%" onSelect={setSelected} selected={selected} onClose={() => setSelected(null)} />
+        <MapCanvas zone={zone} imageUrl={imageUrl} spaces={visibleSpaces} showLabels={showLabels} showPrice={showPrice} zoom={zoom} width="100%" onSelect={setSelected} selected={selected} onClose={() => setSelected(null)} editMode={editMode} onMove={handleMove} onMoveEnd={handleMoveEnd} />
       </div>
 
       {fullscreen && (
@@ -214,7 +292,7 @@ export default function LiveMap({
             {zoomBar(false)}
           </div>
           <div style={{ flex: 1, overflow: 'auto', background: '#fff', borderRadius: 8, padding: 8 }} onClick={() => setSelected(null)}>
-            <MapCanvas zone={zone} imageUrl={imageUrl} spaces={visibleSpaces} showLabels={showLabels} showPrice={showPrice} zoom={zoom} width="94vw" onSelect={setSelected} selected={selected} onClose={() => setSelected(null)} />
+            <MapCanvas zone={zone} imageUrl={imageUrl} spaces={visibleSpaces} showLabels={showLabels} showPrice={showPrice} zoom={zoom} width="94vw" onSelect={setSelected} selected={selected} onClose={() => setSelected(null)} editMode={editMode} onMove={handleMove} onMoveEnd={handleMoveEnd} />
           </div>
         </div>
       )}

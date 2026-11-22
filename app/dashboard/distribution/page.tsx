@@ -97,6 +97,7 @@ export default async function DistributionPage() {
                   imageUrl={imageUrl}
                   initialSpaces={(isGuest ? unsold : mapped) as any}
                   forceUnsoldOnly={isGuest}
+                  canEdit={role >= 2}
                 />
               ) : (
                 <div style={{
