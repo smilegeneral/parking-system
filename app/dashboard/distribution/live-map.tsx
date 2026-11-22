@@ -17,7 +17,7 @@ const STATUS_STYLE: Record<string, { bg: string; label: string }> = {
 const LEGEND_ORDER = ['未售', '预订', '已售', '团购锁定', '已核销', '零售锁定', '取消']
 
 function MapCanvas({
-  zone, imageUrl, spaces, showLabels, showPrice, zoom, width, onSelect,
+  zone, imageUrl, spaces, showLabels, showPrice, zoom, width, onSelect, selected, onClose,
 }: {
   zone: string
   imageUrl: string | null
@@ -27,7 +27,14 @@ function MapCanvas({
   zoom: number
   width: string
   onSelect: (s: ParkingSpace) => void
+  selected: ParkingSpace | null
+  onClose: () => void
 }) {
+  // 悬浮卡定位：跟随被点车位，靠边时收敛百分比，避免溢出容器
+  const sx = selected ? Number(selected.pos_x) : 0
+  const sy = selected ? Number(selected.pos_y) : 0
+  const cardLeft = Math.min(72, Math.max(1, sx + 1.5))
+  const cardTop = sy > 70 ? Math.max(1, sy - 30) : sy + 1.5
   return (
     <div style={{ zoom }}>
       <div style={{
@@ -46,7 +53,7 @@ function MapCanvas({
             key={s.space_id}
             type="button"
             title={`${s.space_id} · ${s.status} · ${s.space_type || '-'}${s.price != null ? ' · ¥' + Number(s.price).toLocaleString() : ''}`}
-            onClick={() => onSelect(s)}
+            onClick={(e) => { e.stopPropagation(); onSelect(s) }}
             style={{
               position: 'absolute',
               left: `${Number(s.pos_x)}%`,
@@ -58,6 +65,8 @@ function MapCanvas({
               background: STATUS_STYLE[s.status]?.bg || '#666',
               color: '#fff', fontSize: 8, lineHeight: '18px', textAlign: 'center',
               cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,.3)', opacity: 0.92,
+              outline: selected?.space_id === s.space_id ? '2px solid #111' : 'none',
+              zIndex: selected?.space_id === s.space_id ? 5 : 1,
             }}
           >
             {showPrice
@@ -65,23 +74,36 @@ function MapCanvas({
               : (showLabels ? s.space_num.replace(/^0+/, '') : '')}
           </button>
         ))}
-      </div>
-    </div>
-  )
-}
-
-function DetailCard({ space, onClose }: { space: ParkingSpace | null; onClose: () => void }) {
-  if (!space) return null
-  return (
-    <div style={{ marginTop: 10, padding: 12, border: '1px solid #ddd', borderRadius: 8, background: '#fff' }}>
-      <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong style={{ fontSize: 15 }}>{space.space_id}</strong>
-        <button type="button" className="btn-ghost" style={{ fontSize: 13 }} onClick={onClose}>关闭</button>
-      </div>
-      <div style={{ marginTop: 8, display: 'flex', gap: 24, fontSize: 14, flexWrap: 'wrap' }}>
-        <div>状态：<span style={{ color: STATUS_STYLE[space.status]?.bg, fontWeight: 600 }}>{space.status}</span></div>
-        <div>类型：{space.space_type || '-'}</div>
-        <div>价格：{space.price != null ? '¥' + Number(space.price).toLocaleString() : '-'}</div>
+        {selected && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              left: `${cardLeft}%`,
+              top: `${cardTop}%`,
+              zIndex: 20,
+              width: 210,
+              padding: 12,
+              border: '1px solid #ddd',
+              borderRadius: 8,
+              background: 'rgba(255,255,255,.98)',
+              boxShadow: '0 6px 20px rgba(0,0,0,.28)',
+              fontSize: 13,
+            }}
+          >
+            <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <strong style={{ fontSize: 15 }}>{selected.space_id}</strong>
+              <button type="button" className="btn-ghost" style={{ fontSize: 12, padding: '0 6px' }} onClick={onClose}>✕</button>
+            </div>
+            <div style={{ marginTop: 8, display: 'grid', gap: 5 }}>
+              <div>状态：<span style={{ color: STATUS_STYLE[selected.status]?.bg, fontWeight: 600 }}>{selected.status}</span></div>
+              <div>类型：{selected.space_type || '-'}</div>
+              <div>房号(housekey)：{selected.house_key || '-'}</div>
+              <div>业主：{selected.owner_name || '-'}</div>
+              <div>价格：{selected.price != null ? '¥' + Number(selected.price).toLocaleString() : '-'}</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -123,7 +145,7 @@ export default function LiveMap({
 
   // ESC 关闭放大
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setFullscreen(false) }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { setFullscreen(false); setSelected(null) } }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
@@ -177,10 +199,9 @@ export default function LiveMap({
       {legend}
       <div style={{ marginBottom: 8 }}>{zoomBar(true)}</div>
 
-      <div style={{ overflow: 'auto', maxWidth: '100%', border: '1px solid #e5e5e5', borderRadius: 8 }}>
-        <MapCanvas zone={zone} imageUrl={imageUrl} spaces={visibleSpaces} showLabels={showLabels} showPrice={showPrice} zoom={zoom} width="100%" onSelect={setSelected} />
+      <div style={{ overflow: 'auto', maxWidth: '100%', border: '1px solid #e5e5e5', borderRadius: 8 }} onClick={() => setSelected(null)}>
+        <MapCanvas zone={zone} imageUrl={imageUrl} spaces={visibleSpaces} showLabels={showLabels} showPrice={showPrice} zoom={zoom} width="100%" onSelect={setSelected} selected={selected} onClose={() => setSelected(null)} />
       </div>
-      <DetailCard space={selected} onClose={() => setSelected(null)} />
 
       {fullscreen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 1000, display: 'flex', flexDirection: 'column', padding: 16 }}>
@@ -192,9 +213,8 @@ export default function LiveMap({
             {legend}
             {zoomBar(false)}
           </div>
-          <div style={{ flex: 1, overflow: 'auto', background: '#fff', borderRadius: 8, padding: 8 }}>
-            <MapCanvas zone={zone} imageUrl={imageUrl} spaces={visibleSpaces} showLabels={showLabels} showPrice={showPrice} zoom={zoom} width="94vw" onSelect={setSelected} />
-            <DetailCard space={selected} onClose={() => setSelected(null)} />
+          <div style={{ flex: 1, overflow: 'auto', background: '#fff', borderRadius: 8, padding: 8 }} onClick={() => setSelected(null)}>
+            <MapCanvas zone={zone} imageUrl={imageUrl} spaces={visibleSpaces} showLabels={showLabels} showPrice={showPrice} zoom={zoom} width="94vw" onSelect={setSelected} selected={selected} onClose={() => setSelected(null)} />
           </div>
         </div>
       )}
