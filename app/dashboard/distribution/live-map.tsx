@@ -105,9 +105,9 @@ function MapCanvas({
           const label = showPrice
             ? (s.price != null ? (Number(s.price) / 10000).toFixed(1) + '万' : '-')
             : (showLabels ? formatSpaceNum(s.space_num) : '')
-          // 车位号字自适应框体：位数越多字号越小，保证 20×12 视觉框内不溢出
+          // 车位号字自适应框体：位数越多字号越小，5 位以上再缩小 1 号
           const len = label.length
-          const visualFont = len <= 2 ? 10 : len === 3 ? 8 : 7
+          const visualFont = len <= 2 ? 10 : len === 3 ? 8 : len === 4 ? 7 : 6
           const fontPx = visualFont / BASE_ZOOM
           const isPicked = selectedIds.includes(s.space_id)
           const isBase = baseId === s.space_id
