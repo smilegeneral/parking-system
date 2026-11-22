@@ -84,7 +84,15 @@ function MapCanvas({
             暂无底图（管理员上传后车位将叠加在图上）
           </div>
         )}
-        {spaces.map(s => (
+        {spaces.map(s => {
+          const label = showPrice
+            ? (s.price != null ? (Number(s.price) / 10000).toFixed(1) + '万' : '-')
+            : (showLabels ? s.space_num.replace(/^0+/, '') : '')
+          // 两位数及以下用缩小框，三/四位恢复原尺寸，避免文字溢出
+          const compact = label.length <= 2
+          const boxW = showPrice ? (compact ? 22 : 30) : (compact ? 12 : 20)
+          const boxH = compact ? 12 : 20
+          return (
           <button
             key={s.space_id}
             type="button"
@@ -96,22 +104,21 @@ function MapCanvas({
               left: `${Number(s.pos_x)}%`,
               top: `${Number(s.pos_y)}%`,
               transform: 'translate(-50%, -50%)',
-              width: showPrice ? 22 : 12, height: 12, padding: 0,
+              width: boxW, height: boxH, padding: 0,
               border: '1px solid rgba(255,255,255,.85)',
-              borderRadius: 3,
+              borderRadius: compact ? 3 : 4,
               background: STATUS_STYLE[s.status]?.bg || '#666',
-              color: '#fff', fontSize: 8, lineHeight: '10px', textAlign: 'center',
+              color: '#fff', fontSize: 8, lineHeight: `${boxH - 2}px`, textAlign: 'center',
               cursor: editMode ? 'move' : 'pointer', touchAction: 'none', userSelect: 'none',
               boxShadow: '0 1px 2px rgba(0,0,0,.3)', opacity: 0.92,
               outline: selected?.space_id === s.space_id ? '2px solid #111' : 'none',
               zIndex: selected?.space_id === s.space_id ? 5 : 1,
             }}
           >
-            {showPrice
-              ? (s.price != null ? (Number(s.price) / 10000).toFixed(1) + '万' : '-')
-              : (showLabels ? s.space_num.replace(/^0+/, '') : '')}
+            {label}
           </button>
-        ))}
+          )
+        })}
         {selected && (
           <div
             onClick={(e) => e.stopPropagation()}
@@ -165,7 +172,7 @@ export default function LiveMap({
   const [showLabels, setShowLabels] = useState(true)
   const [showPrice, setShowPrice] = useState(false)
   const [showUnsoldOnly, setShowUnsoldOnly] = useState(forceUnsoldOnly)
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState(1.5)
   const [fullscreen, setFullscreen] = useState(false)
   const [lastSync, setLastSync] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
@@ -242,7 +249,7 @@ export default function LiveMap({
       <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(z => Math.max(0.6, +(z - 0.2).toFixed(1)))}>－</button>
       <span style={{ minWidth: 42, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
       <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(z => Math.min(3, +(z + 0.2).toFixed(1)))}>＋</button>
-      <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(1)}>复位</button>
+      <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(1.5)}>复位</button>
       <button type="button" className="btn-primary" style={{ padding: '2px 10px' }} onClick={refreshSpaces} disabled={refreshing || saving}>{refreshing ? '刷新中...' : '🔄 刷新车位'}</button>
       {canEdit && (
         <label style={{ display: 'flex', gap: 4, alignItems: 'center', color: editMode ? '#c2410c' : undefined, fontWeight: editMode ? 600 : undefined }}>
