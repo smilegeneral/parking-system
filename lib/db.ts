@@ -75,6 +75,11 @@ const sslConfig = tlsVerifyDisabled
 // 会导致 "client password must be a string" 而连接失败；显式参数可正确传入解码后的密码。
 function buildPoolConfig() {
   const raw = process.env.AIVEN_URL || ''
+  // 本地库不受 Aiven 免费档连接数限制，可用更大池；远程 Aiven 仍保持 max=1。
+  // 注意：变量名虽叫 AIVEN_URL，实际可能指向本地库（如 127.0.0.1）。
+  let isLocal = false
+  try { const h = new URL(raw).hostname; isLocal = /^(localhost|127\.0\.0\.1|::1|0\.0\.0\.0)$/.test(h) } catch { /* ignore */ }
+  const max = isLocal ? 10 : 1
   try {
     const u = new URL(raw.replace(/[?&]sslmode=(verify-full|verify-ca|require|prefer)/, ''))
     return {
@@ -84,7 +89,7 @@ function buildPoolConfig() {
       password: decodeURIComponent(u.password),
       database: u.pathname.replace(/^\//, '') || 'postgres',
       ssl: sslConfig,
-      max: 1,
+      max,
       idleTimeoutMillis: 5000,
       connectionTimeoutMillis: 10000,
     }
@@ -93,7 +98,7 @@ function buildPoolConfig() {
     return {
       connectionString: raw.replace(/[?&]sslmode=(verify-full|verify-ca|require|prefer)/, ''),
       ssl: sslConfig,
-      max: 1,
+      max,
       idleTimeoutMillis: 5000,
       connectionTimeoutMillis: 10000,
     }
