@@ -643,6 +643,30 @@ export async function updateSpacePosition(spaceId: string, posX: number, posY: n
   return (r.rowCount || 0) > 0
 }
 
+// 动态分布图：批量调整车位坐标（行/列对齐，管理员操作），单事务保证全部成功或全部回滚
+export async function updateSpacePositions(items: Array<{ spaceId: string; posX: number; posY: number }>): Promise<number> {
+  if (items.length === 0) return 0
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    let n = 0
+    for (const it of items) {
+      const r = await client.query(
+        `UPDATE parking_spaces SET pos_x=$1, pos_y=$2, updated_at=NOW() WHERE space_id=$3`,
+        [it.posX, it.posY, it.spaceId]
+      )
+      if ((r.rowCount || 0) > 0) n++
+    }
+    await client.query('COMMIT')
+    return n
+  } catch (e) {
+    await client.query('ROLLBACK')
+    throw e
+  } finally {
+    client.release()
+  }
+}
+
 // 动态分布图：某区各状态数量（用于图例计数）
 export async function getZoneStatusCounts(zone: string): Promise<Record<string, number>> {
   const { rows } = await pool.query(
