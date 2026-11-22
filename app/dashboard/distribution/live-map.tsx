@@ -16,6 +16,12 @@ const STATUS_STYLE: Record<string, { bg: string; label: string }> = {
 }
 const LEGEND_ORDER = ['未售', '预订', '已售', '团购锁定', '已核销', '零售锁定', '取消']
 
+// 底图默认放大倍率。车位框按此补偿：默认视图下视觉恒为 20×12px，
+// 用户主动点击 +/- 改变 zoom 时框才跟随比例缩放。
+const BASE_ZOOM = 1.5
+const BOX_VW = 20 / BASE_ZOOM // 框视觉宽 20px 对应的 CSS 尺寸
+const BOX_VH = 12 / BASE_ZOOM // 框视觉高 12px
+
 function MapCanvas({
   zone, imageUrl, spaces, showLabels, showPrice, zoom, width, onSelect, selected, onClose,
   editMode, onMove, onMoveEnd,
@@ -88,10 +94,10 @@ function MapCanvas({
           const label = showPrice
             ? (s.price != null ? (Number(s.price) / 10000).toFixed(1) + '万' : '-')
             : (showLabels ? s.space_num.replace(/^0+/, '') : '')
-          // 两位数及以下用缩小框，三/四位恢复原尺寸，避免文字溢出
-          const compact = label.length <= 2
-          const boxW = showPrice ? (compact ? 22 : 30) : (compact ? 12 : 20)
-          const boxH = compact ? 12 : 20
+          // 车位号字自适应框体：位数越多字号越小，保证 20×12 视觉框内不溢出
+          const len = label.length
+          const visualFont = len <= 2 ? 10 : len === 3 ? 8 : 7
+          const fontPx = visualFont / BASE_ZOOM
           return (
           <button
             key={s.space_id}
@@ -104,11 +110,11 @@ function MapCanvas({
               left: `${Number(s.pos_x)}%`,
               top: `${Number(s.pos_y)}%`,
               transform: 'translate(-50%, -50%)',
-              width: boxW, height: boxH, padding: 0,
+              width: BOX_VW, height: BOX_VH, padding: 0,
               border: '1px solid rgba(255,255,255,.85)',
-              borderRadius: compact ? 3 : 4,
+              borderRadius: 3,
               background: STATUS_STYLE[s.status]?.bg || '#666',
-              color: '#fff', fontSize: 8, lineHeight: `${boxH - 2}px`, textAlign: 'center',
+              color: '#fff', fontSize: fontPx, lineHeight: `${BOX_VH - 2}px`, textAlign: 'center',
               cursor: editMode ? 'move' : 'pointer', touchAction: 'none', userSelect: 'none',
               boxShadow: '0 1px 2px rgba(0,0,0,.3)', opacity: 0.92,
               outline: selected?.space_id === s.space_id ? '2px solid #111' : 'none',
