@@ -16,11 +16,11 @@ const STATUS_STYLE: Record<string, { bg: string; label: string }> = {
 }
 const LEGEND_ORDER = ['未售', '预订', '已售', '团购锁定', '已核销', '零售锁定', '取消']
 
-// 底图锁定基准放大倍率 180%。车位框按此补偿：基准视图下视觉恒为 22×15px，
+// 底图锁定基准放大倍率 180%。车位框按此补偿：基准视图下视觉恒为 24×16px，
 // 用户在此基础上点击 +/- 继续放大时，框才跟随比例缩放。
 const BASE_ZOOM = 1.8
-const BOX_VW = 22 / BASE_ZOOM // 框视觉宽 22px 对应的 CSS 尺寸
-const BOX_VH = 15 / BASE_ZOOM // 框视觉高 15px
+const BOX_VW = 24 / BASE_ZOOM // 框视觉宽 24px 对应的 CSS 尺寸
+const BOX_VH = 16 / BASE_ZOOM // 框视觉高 16px
 
 // 车位框标签：含字母的车位号原样保留（X310B→X310B）；
 // 纯数字不足 3 位前补 0（78→078、215→215、1234→1234）
@@ -107,7 +107,7 @@ function MapCanvas({
             : (showLabels ? formatSpaceNum(s.space_num) : '')
           // 车位号字自适应框体：位数越多字号越小，5 位以上再缩小 1 号
           const len = label.length
-          const visualFont = len <= 2 ? 10 : len === 3 ? 8 : len === 4 ? 7 : 6
+          const visualFont = len <= 2 ? 11 : len === 3 ? 9 : len === 4 ? 8 : 7
           const fontPx = visualFont / BASE_ZOOM
           const isPicked = selectedIds.includes(s.space_id)
           const isBase = baseId === s.space_id
