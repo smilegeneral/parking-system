@@ -18,7 +18,7 @@ const LEGEND_ORDER = ['未售', '预订', '已售', '团购锁定', '已核销',
 
 // 底图默认放大倍率。车位框按此补偿：默认视图下视觉恒为 20×12px，
 // 用户主动点击 +/- 改变 zoom 时框才跟随比例缩放。
-const BASE_ZOOM = 1.5
+const BASE_ZOOM = 2.1
 const BOX_VW = 20 / BASE_ZOOM // 框视觉宽 20px 对应的 CSS 尺寸
 const BOX_VH = 12 / BASE_ZOOM // 框视觉高 12px
 
@@ -199,7 +199,7 @@ export default function LiveMap({
   const [showLabels, setShowLabels] = useState(true)
   const [showPrice, setShowPrice] = useState(false)
   const [showUnsoldOnly, setShowUnsoldOnly] = useState(forceUnsoldOnly)
-  const [zoom, setZoom] = useState(1.5)
+  const [zoom, setZoom] = useState(2.1)
   const [fullscreen, setFullscreen] = useState(false)
   const [lastSync, setLastSync] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
@@ -357,7 +357,7 @@ export default function LiveMap({
       <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(z => Math.max(0.6, +(z - 0.2).toFixed(1)))}>－</button>
       <span style={{ minWidth: 42, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
       <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(z => Math.min(3, +(z + 0.2).toFixed(1)))}>＋</button>
-      <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(1.5)}>复位</button>
+      <button type="button" className="btn-ghost" style={{ padding: '2px 9px' }} onClick={() => setZoom(2.1)}>复位</button>
       <button type="button" className="btn-primary" style={{ padding: '2px 10px' }} onClick={refreshSpaces} disabled={refreshing || saving}>{refreshing ? '刷新中...' : '🔄 刷新车位'}</button>
       {canEdit && (
         <label style={{ display: 'flex', gap: 4, alignItems: 'center', color: editMode ? '#c2410c' : undefined, fontWeight: editMode ? 600 : undefined }}>
