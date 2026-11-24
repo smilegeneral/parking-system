@@ -39,8 +39,8 @@ export default async function DistributionPage() {
   )
 
   return (
-    <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px' }}>
-      <header className="flex" style={{ justifyContent: 'space-between', marginBottom: 20 }}>
+    <main className="dist-page" style={{ maxWidth: 1200, margin: '0 auto', padding: '24px' }}>
+      <header className="flex dist-header" style={{ justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700 }}>🅿️ 车位分布图</h1>
           <p className="text-sm text-gray">
@@ -48,19 +48,26 @@ export default async function DistributionPage() {
             {isGuest && ' · 仅显示未售车位'}
           </p>
         </div>
-        <div className="flex" style={{ gap: 8 }}>
+        <div className="flex dist-actions" style={{ gap: 8 }}>
           {role !== 0 && <Link href="/dashboard" className="btn-ghost" style={{ fontSize: 14 }}>返回首页</Link>}
           <SignOutButton />
         </div>
       </header>
 
+      {/* 区域快速导航：手机端横向滚动，点按跳到对应分区 */}
+      <nav className="dist-zone-nav" style={{ display: 'none', gap: 8, marginBottom: 16 }}>
+        {zonesData.map(({ zone, unsold }, i) => (
+          <a key={zone} href={`#dist-zone-${i}`}>{zone} · 未售 {unsold.length}</a>
+        ))}
+      </nav>
+
       <SpaceQuery />
 
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
-        {zonesData.map(({ zone, unsold, mapped }) => {
+      <div className="grid dist-zones" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
+        {zonesData.map(({ zone, unsold, mapped }, zi) => {
           const imageUrl = ZONE_BASEMAP[zone] || null
           return (
-            <section key={zone} className="card" style={{ padding: 16 }}>
+            <section key={zone} id={`dist-zone-${zi}`} className="card dist-zone-card" style={{ padding: 16, scrollMarginTop: 12 }}>
               <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>
                 {zone} <span className="text-sm text-gray">（未售 {unsold.length} 个）</span>
               </h2>
@@ -71,12 +78,12 @@ export default async function DistributionPage() {
                 {unsold.length === 0 ? (
                   <p className="text-sm text-gray">该区暂无未售车位</p>
                 ) : (
-                  <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-                    <table>
+                  <div className="dist-unsold-wrap" style={{ maxHeight: 220, overflowY: 'auto' }}>
+                    <table className="dist-unsold-table">
                       <thead>
                         <tr>
                           <th style={{ fontSize: 14 }}>车位号</th>
-                          <th style={{ fontSize: 14 }}>车位类型</th>
+                          <th className="dist-col-type" style={{ fontSize: 14 }}>车位类型</th>
                           <th style={{ fontSize: 14 }}>价格(元)</th>
                         </tr>
                       </thead>
@@ -84,7 +91,7 @@ export default async function DistributionPage() {
                         {unsold.map(s => (
                           <tr key={s.space_id}>
                             <td style={{ fontSize: 14 }}>{s.space_id}</td>
-                            <td style={{ fontSize: 14 }}>{s.space_type || '-'}</td>
+                            <td className="dist-col-type" style={{ fontSize: 14 }}>{s.space_type || '-'}</td>
                             <td style={{ fontSize: 14 }}>{s.price ?? '-'}</td>
                           </tr>
                         ))}

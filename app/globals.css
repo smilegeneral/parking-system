@@ -246,3 +246,72 @@ tr:hover td { background: #f5f9ff; }
   flex-shrink: 0; padding: 14px 20px; border-top: 1px solid #eee;
   display: flex; gap: 8px;
 }
+
+/* ============ 车位分布图 · 移动端优化 ============ */
+/* 手机端隐藏侧边栏：游客只需看分布图，侧边栏无实际用途；
+   通过 .app-shell:has(.dist-page) 限定仅分布图页生效，不影响其它后台页面。 */
+@media (max-width: 640px) {
+  .app-shell-guest .sidebar,
+  .app-shell:has(.dist-page) .sidebar { display: none !important; }
+  .app-shell-guest .app-content,
+  .app-shell:has(.dist-page) .app-content { padding: 0 !important; }
+
+  /* 主容器：贴边、上下留白 */
+  .dist-page { padding: 12px 10px 32px !important; }
+
+  /* 顶部：标题与按钮竖排，退出按钮加大触摸区 */
+  .dist-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; margin-bottom: 14px !important; }
+  .dist-header h1 { font-size: 20px !important; }
+  .dist-header .dist-actions { width: 100%; }
+  .dist-header .dist-actions > * { flex: 1 1 0; text-align: center; }
+
+  /* 区域导航 chip：横向滚动，便于快速跳到某区 */
+  .dist-zone-nav {
+    display: flex !important; gap: 8px !important; overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch; padding: 2px 0 6px !important; margin-bottom: 14px !important;
+    scrollbar-width: none;
+  }
+  .dist-zone-nav::-webkit-scrollbar { display: none; }
+  .dist-zone-nav a {
+    flex: 0 0 auto; padding: 7px 14px; font-size: 14px; white-space: nowrap;
+    border: 1px solid #1677ff; border-radius: 18px; background: #fff; color: #1677ff;
+    text-decoration: none;
+  }
+  .dist-zone-nav a:active { background: #1677ff; color: #fff; }
+
+  /* 区域卡片：单列铺满 */
+  .dist-zones { grid-template-columns: 1fr !important; gap: 14px !important; }
+  .dist-zone-card { padding: 12px !important; }
+  .dist-zone-card h2 { font-size: 16px !important; }
+
+  /* 未售车位表格：横向可滚动、单元格紧凑、隐藏车位类型列（图内已显示） */
+  .dist-unsold-wrap { max-height: 260px !important; }
+  .dist-unsold-table { font-size: 13px; min-width: 0; }
+  .dist-unsold-table th, .dist-unsold-table td { padding: 8px 8px !important; font-size: 13px !important; }
+  .dist-unsold-table .dist-col-type { display: none; }
+
+  /* 查询卡片：输入框至少 16px 防止 iOS 聚焦自动放大 */
+  .dist-query input[type='text'] { font-size: 16px !important; min-width: 0 !important; flex: 1 1 140px !important; }
+  .dist-query .btn-primary { flex: 0 0 auto; }
+  .dist-query table { font-size: 13px !important; }
+  .dist-query th, .dist-query td { padding: 8px 8px !important; font-size: 13px !important; }
+  .dist-query th:nth-child(4), .dist-query td:nth-child(4) { display: none; }
+}
+
+/* ============ 动态分布图 · 移动端触控优化 ============ */
+@media (max-width: 640px) {
+  .live-map-toolbar { gap: 6px !important; }
+  .live-map-toolbar .btn-ghost,
+  .live-map-toolbar .btn-primary { padding: 6px 10px !important; font-size: 13px !important; }
+
+  /* 触摸目标：把车位框视觉尺寸从 24×16 放大到 36×24px，便于手指点按 */
+  .live-map-box { width: 20px !important; height: 13.34px !important; line-height: 13.34px !important; }
+  .live-map-box .live-map-box-label { font-size: 6.2px !important; }
+
+  /* 详情卡改为底部浮层，避免在小屏溢出或遮挡地图 */
+  .live-map-card {
+    position: fixed !important; left: 8px !important; right: 8px !important; bottom: 8px !important;
+    top: auto !important; width: auto !important; z-index: 1100 !important;
+    box-shadow: 0 -4px 20px rgba(0,0,0,.28) !important;
+  }
+}

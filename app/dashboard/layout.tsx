@@ -35,7 +35,7 @@ export default async function DashboardLayout({
   const items = allItems.filter(it => can(it.perm))
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${role === 0 ? ' app-shell-guest' : ''}`}>
       <Sidebar
         items={items}
         user={{ displayName: user.displayName, name: user.name, role }}

@@ -36,7 +36,7 @@ export default function SpaceQuery() {
   }
 
   return (
-    <section className="card" style={{ padding: 16, marginBottom: 20 }}>
+    <section className="card dist-query" style={{ padding: 16, marginBottom: 20 }}>
       <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>🔍 车位查询</h2>
       <div className="flex" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <input

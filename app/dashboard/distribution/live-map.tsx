@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ParkingSpace } from '@/lib/types'
 import { getMappedSpacesClient, saveSpacePosition, saveSpacePositions } from './actions'
 
@@ -54,6 +55,18 @@ function MapCanvas({
   const boxRef = useRef<HTMLDivElement>(null)
   const dragId = useRef<string | null>(null)
   const movedRef = useRef(false)
+  // 移动端详情卡渲染到 body，避免被地图容器的 zoom 影响 fixed 定位；
+  // 桌面端仍留在地图内做 absolute 跟随定位（保持原有行为）。
+  const [isMobile, setIsMobile] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+    const mq = window.matchMedia('(max-width: 640px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
 
   function posFromEvent(clientX: number, clientY: number) {
     const el = boxRef.current
@@ -82,7 +95,40 @@ function MapCanvas({
   const sy = selected ? Number(selected.pos_y) : 0
   const cardLeft = Math.min(72, Math.max(1, sx + 1.5))
   const cardTop = sy > 70 ? Math.max(1, sy - 30) : sy + 1.5
-  return (
+
+  const detailCard = selected ? (
+    <div
+      className="live-map-card"
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        position: 'absolute',
+        left: `${cardLeft}%`,
+        top: `${cardTop}%`,
+        zIndex: 20,
+        width: 210,
+        padding: 12,
+        border: '1px solid #ddd',
+        borderRadius: 8,
+        background: 'rgba(255,255,255,.98)',
+        boxShadow: '0 6px 20px rgba(0,0,0,.28)',
+        fontSize: 13,
+      }}
+    >
+      <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <strong style={{ fontSize: 15 }}>{selected.space_id}</strong>
+        <button type="button" className="btn-ghost" style={{ fontSize: 12, padding: '0 6px' }} onClick={onClose}>✕</button>
+      </div>
+      <div style={{ marginTop: 8, display: 'grid', gap: 5 }}>
+        <div>状态：<span style={{ color: STATUS_STYLE[selected.status]?.bg, fontWeight: 600 }}>{selected.status}</span></div>
+        <div>类型：{selected.space_type || '-'}</div>
+        <div>房号(housekey)：{selected.house_key || '-'}</div>
+        <div>业主：{selected.owner_name || '-'}</div>
+        <div>价格：{selected.price != null ? '¥' + Number(selected.price).toLocaleString() : '-'}</div>
+      </div>
+    </div>
+  ) : null
+
+  const mapTree = (
     <div style={{ zoom }}>
       <div
         ref={boxRef}
@@ -115,6 +161,7 @@ function MapCanvas({
           <button
             key={s.space_id}
             type="button"
+            className="live-map-box"
             title={editMode ? `点选加入对齐 / Shift+点击设为基准 / 拖动调整：${s.space_id} (${Number(s.pos_x).toFixed(1)}%, ${Number(s.pos_y).toFixed(1)}%)` : `${s.space_id} · ${s.status} · ${s.space_type || '-'}${s.price != null ? ' · ¥' + Number(s.price).toLocaleString() : ''}`}
             onPointerDown={editMode ? (e) => { e.stopPropagation(); dragId.current = s.space_id; movedRef.current = false; try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId) } catch { /* noop */ } } : undefined}
             onClick={(e) => {
@@ -139,46 +186,29 @@ function MapCanvas({
               zIndex: isBase ? 8 : isPicked ? 6 : selected?.space_id === s.space_id ? 5 : 1,
             }}
           >
-            {label}
+            <span className="live-map-box-label">{label}</span>
             {isBase && (
               <span style={{ position: 'absolute', left: '50%', top: -10, transform: 'translateX(-50%)', background: '#f97316', color: '#fff', fontSize: 7, lineHeight: '9px', padding: '0 2px', borderRadius: 2, whiteSpace: 'nowrap', pointerEvents: 'none' }}>基准</span>
             )}
           </button>
           )
         })}
-        {selected && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'absolute',
-              left: `${cardLeft}%`,
-              top: `${cardTop}%`,
-              zIndex: 20,
-              width: 210,
-              padding: 12,
-              border: '1px solid #ddd',
-              borderRadius: 8,
-              background: 'rgba(255,255,255,.98)',
-              boxShadow: '0 6px 20px rgba(0,0,0,.28)',
-              fontSize: 13,
-            }}
-          >
-            <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <strong style={{ fontSize: 15 }}>{selected.space_id}</strong>
-              <button type="button" className="btn-ghost" style={{ fontSize: 12, padding: '0 6px' }} onClick={onClose}>✕</button>
-            </div>
-            <div style={{ marginTop: 8, display: 'grid', gap: 5 }}>
-              <div>状态：<span style={{ color: STATUS_STYLE[selected.status]?.bg, fontWeight: 600 }}>{selected.status}</span></div>
-              <div>类型：{selected.space_type || '-'}</div>
-              <div>房号(housekey)：{selected.house_key || '-'}</div>
-              <div>业主：{selected.owner_name || '-'}</div>
-              <div>价格：{selected.price != null ? '¥' + Number(selected.price).toLocaleString() : '-'}</div>
-            </div>
-          </div>
-        )}
+        {selected && !isMobile && detailCard}
       </div>
     </div>
   )
+
+  // 移动端：把详情卡 portal 到 body，固定定位为底部浮层（不受 zoom 包含块影响）
+  // 首帧（含 SSR）统一走 mapTree，避免 hydration 不一致；mounted 后再切换。
+  if (mounted && isMobile) {
+    return (
+      <>
+        {mapTree}
+        {detailCard && createPortal(detailCard, document.body)}
+      </>
+    )
+  }
+  return mapTree
 }
 
 export default function LiveMap({
@@ -342,7 +372,7 @@ export default function LiveMap({
   for (const s of visibleSpaces) counts[s.status] = (counts[s.status] || 0) + 1
 
   const zoomBar = (withFull: boolean) => (
-    <div className="flex" style={{ gap: 8, alignItems: 'center', fontSize: 13, flexWrap: 'wrap' }}>
+    <div className="flex live-map-toolbar" style={{ gap: 8, alignItems: 'center', fontSize: 13, flexWrap: 'wrap' }}>
       <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
         <input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /> 编号
       </label>
