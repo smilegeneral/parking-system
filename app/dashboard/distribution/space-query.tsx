@@ -75,7 +75,7 @@ export default function SpaceQuery() {
                       <td style={{ fontSize: 14 }}>{s.garage_zone || '-'}</td>
                       <td style={{ fontSize: 14, color: STATUS_COLOR[s.status] || '#374151', fontWeight: 600 }}>{s.status}</td>
                       <td style={{ fontSize: 14 }}>{s.space_type || '-'}</td>
-                      <td style={{ fontSize: 14 }}>{s.price != null ? '¥' + Number(s.price).toLocaleString() : '-'}</td>
+                      <td style={{ fontSize: 14 }}>{s.status === '未售' && s.price != null ? '¥' + Number(s.price).toLocaleString() : '-'}</td>
                     </tr>
                   ))}
                 </tbody>

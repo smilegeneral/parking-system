@@ -16,10 +16,12 @@ export async function getMappedSpacesClient(zone: string): Promise<ParkingSpace[
 }
 
 // 车位查询：无权限设定，所有登录用户（含访客）均可查询车位状态/类型/价格
+// 价格仅未售可见：非未售车位的 price 一律置空，不下发到客户端
 export async function querySpacesByNum(keyword: string): Promise<ParkingSpace[]> {
   const session = await getServerSession(authOptions)
   if (!session?.user) return []
-  return querySpaceByNum(keyword)
+  const rows = await querySpaceByNum(keyword)
+  return rows.map(s => s.status === '未售' ? s : { ...s, price: null as any })
 }
 
 // 手动拖拽调整车位坐标：仅管理员(role>=2)可用，guest/销售员禁止
