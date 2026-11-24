@@ -132,6 +132,7 @@ function MapCanvas({
     <div style={{ zoom }}>
       <div
         ref={boxRef}
+        className="live-map-canvas"
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}

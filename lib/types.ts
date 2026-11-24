@@ -490,6 +490,15 @@ export interface ZoneStat {
 // ---------- 车库分区（车位分布图使用的六个区） ----------
 export const GARAGE_ZONES: string[] = ['A区', 'B区', 'C区', 'D1区', 'D2区', 'E区']
 
+// 各区底图（随代码发布，位于 public/garage-maps/），分布页与车位查询局部图共用
+export const ZONE_BASEMAP: Record<string, string> = {
+  'A区': '/garage-maps/A.jpg',
+  'B区': '/garage-maps/B.jpg',
+  'D1区': '/garage-maps/D1.jpg',
+  'D2区': '/garage-maps/D2.jpg',
+  'E区': '/garage-maps/E.jpg',
+}
+
 // ---------- 车库分布图图片 garage_maps ----------
 export interface GarageMap {
   id: number

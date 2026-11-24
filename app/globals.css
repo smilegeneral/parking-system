@@ -304,9 +304,10 @@ tr:hover td { background: #f5f9ff; }
   .live-map-toolbar .btn-ghost,
   .live-map-toolbar .btn-primary { padding: 6px 10px !important; font-size: 13px !important; }
 
-  /* 触摸目标：把车位框视觉尺寸从 24×16 放大到 36×24px，便于手指点按 */
-  .live-map-box { width: 20px !important; height: 13.34px !important; line-height: 13.34px !important; }
-  .live-map-box .live-map-box-label { font-size: 6.2px !important; }
+  /* 手机端不显示车位框：底图保持干净，改由「车位查询」的局部放大图定位车位 */
+  .live-map-box { display: none !important; }
+  /* 无车位框时，编号/价格/仅未售等开关无意义，一并隐藏 */
+  .live-map-toolbar > label { display: none !important; }
 
   /* 详情卡改为底部浮层，避免在小屏溢出或遮挡地图 */
   .live-map-card {

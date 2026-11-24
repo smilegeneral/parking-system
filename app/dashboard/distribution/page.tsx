@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { getUnsoldSpacesByZone, getMappedSpacesByZone } from '@/lib/queries'
-import { GARAGE_ZONES } from '@/lib/types'
+import { GARAGE_ZONES, ZONE_BASEMAP } from '@/lib/types'
 import SignOutButton from '../sign-out-button'
 import LiveMap from './live-map'
 import SpaceQuery from './space-query'
@@ -12,14 +12,7 @@ import SpaceQuery from './space-query'
 //  - 其他角色默认显示全部，可勾选"仅未售"
 // ============================================================
 
-// 各区底图：随代码发布，位于 public/garage-maps/
-const ZONE_BASEMAP: Record<string, string> = {
-  'A区': '/garage-maps/A.jpg',
-  'B区': '/garage-maps/B.jpg',
-  'D1区': '/garage-maps/D1.jpg',
-  'D2区': '/garage-maps/D2.jpg',
-  'E区': '/garage-maps/E.jpg',
-}
+// 底图映射见 lib/types.ts 的 ZONE_BASEMAP（分布页与查询局部图共用）
 
 export default async function DistributionPage() {
   const session = await auth()
