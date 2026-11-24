@@ -4,6 +4,7 @@ import { getUnsoldSpacesByZone, getMappedSpacesByZone } from '@/lib/queries'
 import { GARAGE_ZONES } from '@/lib/types'
 import SignOutButton from '../sign-out-button'
 import LiveMap from './live-map'
+import SpaceQuery from './space-query'
 
 // ============================================================
 //  车位分布图 - 动态图（底图随代码发布，不再依赖后台上传）
@@ -52,6 +53,8 @@ export default async function DistributionPage() {
           <SignOutButton />
         </div>
       </header>
+
+      <SpaceQuery />
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
         {zonesData.map(({ zone, unsold, mapped }) => {

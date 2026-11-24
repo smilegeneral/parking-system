@@ -2,7 +2,7 @@
 
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getMappedSpacesByZone, updateSpacePosition, updateSpacePositions } from '@/lib/queries'
+import { getMappedSpacesByZone, updateSpacePosition, updateSpacePositions, querySpaceByNum } from '@/lib/queries'
 import type { ParkingSpace } from '@/lib/types'
 
 // 供动态分布图客户端轮询：返回某区带坐标车位的最新状态
@@ -13,6 +13,13 @@ export async function getMappedSpacesClient(zone: string): Promise<ParkingSpace[
   const role = (session.user as any)?.role ?? 1
   const all = await getMappedSpacesByZone(zone)
   return role === 0 ? all.filter(s => s.status === '未售') : all
+}
+
+// 车位查询：无权限设定，所有登录用户（含访客）均可查询车位状态/类型/价格
+export async function querySpacesByNum(keyword: string): Promise<ParkingSpace[]> {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return []
+  return querySpaceByNum(keyword)
 }
 
 // 手动拖拽调整车位坐标：仅管理员(role>=2)可用，guest/销售员禁止

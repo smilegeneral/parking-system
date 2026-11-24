@@ -634,6 +634,22 @@ export async function getMappedSpacesByZone(zone: string): Promise<ParkingSpace[
   return rows as ParkingSpace[]
 }
 
+// 分布图车位查询：按车位号（space_id / space_num）模糊匹配
+// 返回状态/类型/价格/房号等公开信息，无角色限制
+export async function querySpaceByNum(keyword: string): Promise<ParkingSpace[]> {
+  const kw = keyword.trim()
+  if (!kw) return []
+  const { rows } = await pool.query(
+    `SELECT space_id, garage_zone, space_num, status, space_type, house_key, price, pos_x, pos_y
+       FROM parking_spaces
+      WHERE space_id ILIKE '%' || $1 || '%' OR space_num ILIKE '%' || $1 || '%'
+      ORDER BY garage_zone, space_num
+      LIMIT 50`,
+    [kw]
+  )
+  return rows as ParkingSpace[]
+}
+
 // 动态分布图：手动拖拽调整车位坐标（管理员操作）
 export async function updateSpacePosition(spaceId: string, posX: number, posY: number): Promise<boolean> {
   const r = await pool.query(
